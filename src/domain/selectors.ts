@@ -284,13 +284,9 @@ export async function getHomeSections(year: number = currentYear()): Promise<Hom
     ready: withStatus("ready"),
     drinkSoon: withStatus("drink-soon"),
     pastPeak: withStatus("past-peak"),
+    // Wines still on hold that open next year. A window opening this year already shows as Ready.
     comingIntoWindow: inCellar
-      .filter(
-        (r) =>
-          r.wine.windowFrom !== null &&
-          (r.wine.windowFrom === year + 1 ||
-            (r.wine.windowFrom === year && r.status !== "past-peak")),
-      )
+      .filter((r) => r.status === "hold" && r.wine.windowFrom === year + 1)
       .sort(
         (a, b) => (a.wine.windowFrom ?? 0) - (b.wine.windowFrom ?? 0) || byName(a.wine, b.wine),
       ),

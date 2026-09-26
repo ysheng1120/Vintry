@@ -277,6 +277,13 @@ describe("home sections", () => {
     const home = await getHomeSections(2027);
     expect(producers(home.comingIntoWindow)).toEqual(["Château Margaux"]);
   });
+
+  it("does not repeat a wine whose window opens this year, since it is already ready", async () => {
+    await seed();
+    const home = await getHomeSections(2028);
+    expect(producers(home.ready)).toContain("Château Margaux");
+    expect(producers(home.comingIntoWindow)).not.toContain("Château Margaux");
+  });
 });
 
 describe("stats", () => {
