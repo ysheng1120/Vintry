@@ -128,3 +128,13 @@ npm run test:e2e   # Playwright browser tests
 npm run build      # production build in dist/
 npm start          # the same as the double-click launcher
 ```
+
+**Live AI check.** The regular test suite never calls the real Claude API. To sanity-check the
+AI features against the live model (costs a few cents), run:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... npm run eval:ai
+```
+
+This uses the default model unless you set `VINTRY_EVAL_MODEL` to a different model id. Without
+`ANTHROPIC_API_KEY` set, the suite reports itself as skipped and exits 0.

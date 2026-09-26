@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "eval:ai": "vitest run --config vitest.eval.config.ts",
     "check": "npm run typecheck && npm run lint && npm run test",
     "icons": "node scripts/generate-icons.mjs",
     "start": "node scripts/launch.mjs"
