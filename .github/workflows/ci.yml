@@ -48,3 +48,48 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  launcher:
+    # Runs the double-click launchers on their real operating systems.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      VINTRY_NO_OPEN: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Start Vintry with the macOS launcher
+        if: runner.os == 'macOS'
+        run: nohup bash "./Start Vintry.command" > launcher.log 2>&1 &
+
+      - name: Start Vintry with the Windows launcher
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Start-Process -FilePath cmd.exe -ArgumentList '/c "Start Vintry.bat" > launcher.log 2>&1' -WindowStyle Hidden
+
+      - name: Wait for Vintry and check its security headers
+        shell: bash
+        run: |
+          for i in $(seq 1 180); do
+            if curl -sf -o /dev/null http://localhost:47821/; then break; fi
+            sleep 2
+          done
+          curl -sfI http://localhost:47821/ | tee headers.txt
+          grep -qi "content-security-policy" headers.txt
+
+      - name: A second launch only opens the running app
+        shell: bash
+        run: node scripts/launch.mjs | tee second.log && grep -q "already running" second.log
+
+      - name: Show launcher output
+        if: ${{ always() }}
+        shell: bash
+        run: cat launcher.log || true
