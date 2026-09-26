@@ -33,7 +33,7 @@ export function AiStatusNotice({ status, manual, className }: AiStatusNoticeProp
         </p>
         <p className="mt-1 text-sm text-ink-muted">
           {noKey
-            ? "Add a key to use this. You pay Anthropic only for what you use, often cents a month."
+            ? "Add a key to use this. You pay Anthropic only for what you use; Settings shows the cost."
             : status.reason}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
