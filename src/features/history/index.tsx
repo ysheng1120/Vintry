@@ -1,16 +1,27 @@
+import { useLiveQuery } from "dexie-react-hooks";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { Tabs } from "../../components/ui/Tabs";
 import { bottles } from "../../domain/labels";
-import { useHistory, useRecentlyDeleted } from "../../domain/selectors";
+import { getHistory, useRecentlyDeleted } from "../../domain/selectors";
+import { checkUndoAll } from "../../domain/undo";
 import { formatDate } from "../../lib/format";
 import { useConsumptionLog } from "./consumptionLog";
 import { DeletedRow } from "./DeletedRow";
 import { HistoryRow } from "./HistoryRow";
 
+/** The history list with each batch's undo check, recomputed whenever the history changes. */
+function useHistoryWithChecks() {
+  return useLiveQuery(async () => {
+    const history = await getHistory();
+    return { history, checks: await checkUndoAll(history) };
+  }, []);
+}
+
 function AllChanges() {
-  const history = useHistory();
-  if (history === undefined) return <SkeletonText lines={5} />;
+  const loaded = useHistoryWithChecks();
+  if (loaded === undefined) return <SkeletonText lines={5} />;
+  const { history, checks } = loaded;
   if (history.length === 0) {
     return (
       <p className="text-ink-muted">No changes yet. Adds, drinks, moves and edits appear here.</p>
@@ -19,7 +30,7 @@ function AllChanges() {
   return (
     <ul>
       {history.map((batch) => (
-        <HistoryRow key={batch.id} batch={batch} />
+        <HistoryRow key={batch.id} batch={batch} check={checks.get(batch.id)} />
       ))}
     </ul>
   );

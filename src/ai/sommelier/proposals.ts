@@ -203,6 +203,31 @@ async function quantityChanged(lot: Lot, wine: Wine, expected: number): Promise<
   });
 }
 
+/**
+ * Resolves the lot a change targets, then checks the count the model expected and, unless
+ * `allowAnyQuantity`, that the lot holds enough bottles. Returns the lot or a tool result.
+ */
+async function resolveForChange(
+  input: LotTarget & { quantity: number; expectedQuantity?: number },
+  { allowClosed = false, allowAnyQuantity = false } = {},
+): Promise<Resolved> {
+  const resolved = await resolveLot(input, { allowClosed });
+  if ("prepared" in resolved) return resolved;
+  const { lot, wine } = resolved;
+  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
+    return { prepared: await quantityChanged(lot, wine, input.expectedQuantity) };
+  }
+  if (!allowAnyQuantity && input.quantity > lot.quantity) {
+    return {
+      prepared: result(
+        `Only ${bottles(lot.quantity)} left in that lot. Nothing was changed.`,
+        true,
+      ),
+    };
+  }
+  return resolved;
+}
+
 // ---------- preparing cards ----------
 
 function invalid(name: string, error: z.ZodError): Prepared {
@@ -216,15 +241,9 @@ function invalid(name: string, error: z.ZodError): Prepared {
 type In<N extends ProposalToolName> = z.output<(typeof proposalToolSchemas)[N]>;
 
 async function prepareConsume(input: In<"propose_consume">): Promise<Prepared> {
-  const resolved = await resolveLot(input);
+  const resolved = await resolveForChange(input);
   if ("prepared" in resolved) return resolved.prepared;
   const { lot, wine } = resolved;
-  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
-    return quantityChanged(lot, wine, input.expectedQuantity);
-  }
-  if (input.quantity > lot.quantity) {
-    return result(`Only ${bottles(lot.quantity)} left in that lot. Nothing was changed.`, true);
-  }
   const place = lotPlace(await locationName(lot.locationId), lot.bin);
   const lines = [
     `From ${place}: ${lot.quantity} now, ${lot.quantity - input.quantity} after`,
@@ -247,15 +266,9 @@ async function prepareConsume(input: In<"propose_consume">): Promise<Prepared> {
 }
 
 async function prepareMove(input: In<"propose_move">): Promise<Prepared> {
-  const resolved = await resolveLot(input);
+  const resolved = await resolveForChange(input);
   if ("prepared" in resolved) return resolved.prepared;
   const { lot, wine } = resolved;
-  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
-    return quantityChanged(lot, wine, input.expectedQuantity);
-  }
-  if (input.quantity > lot.quantity) {
-    return result(`Only ${bottles(lot.quantity)} left in that lot. Nothing was changed.`, true);
-  }
   if (input.toLocationId && !(await db.locations.get(input.toLocationId))) {
     const locations = await db.locations.toArray();
     return result({
@@ -281,12 +294,12 @@ async function prepareMove(input: In<"propose_move">): Promise<Prepared> {
 }
 
 async function prepareAdjust(input: In<"propose_adjust_quantity">): Promise<Prepared> {
-  const resolved = await resolveLot(input, { allowClosed: Boolean(input.lotId) });
+  const resolved = await resolveForChange(input, {
+    allowClosed: Boolean(input.lotId),
+    allowAnyQuantity: true,
+  });
   if ("prepared" in resolved) return resolved.prepared;
   const { lot, wine } = resolved;
-  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
-    return quantityChanged(lot, wine, input.expectedQuantity);
-  }
   if (input.quantity === lot.quantity) {
     return result(`That lot already holds ${bottles(lot.quantity)}. Nothing was changed.`, true);
   }

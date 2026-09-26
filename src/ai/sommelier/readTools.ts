@@ -295,12 +295,18 @@ async function consumptionHistory(input: Input<"get_consumption_history">): Prom
 
 async function showBottles({ wineIds }: Input<"show_bottles">): Promise<ReadOutcome> {
   const unique = [...new Set(wineIds)];
-  const rows = await getCellarList({ includeDrunk: true });
-  const byId = new Map(rows.map((row) => [row.wine.id, row]));
+  const [wines, lots] = await Promise.all([
+    db.wines.bulkGet(unique),
+    db.lots.where("wineId").anyOf(unique).toArray(),
+  ]);
   // Only wines that exist with bottles left become cards (R14); others are dropped silently.
-  const shown = unique
-    .map((id) => byId.get(id))
-    .filter((row): row is CellarRow => row !== undefined && row.bottles > 0);
+  const shown = wines.flatMap((wine) => {
+    if (!wine || wine.deletedAt) return [];
+    const count = lots
+      .filter((l) => l.wineId === wine.id && l.quantity > 0)
+      .reduce((sum, l) => sum + l.quantity, 0);
+    return count > 0 ? [{ wine, bottles: count }] : [];
+  });
   return {
     content: json({
       shown: shown.map((row) => ({

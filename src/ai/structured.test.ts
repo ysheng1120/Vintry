@@ -6,7 +6,7 @@ import { resetDatabase } from "../db/testing";
 import { saveApiKey } from "./client";
 import { AiError } from "./errors";
 import { fakeApiError, installFakeAi, uninstallFakeAi, type FakeAi } from "./fake";
-import { runStructured } from "./structured";
+import { runStructured, stripFence } from "./structured";
 
 const Wine = z.object({ producer: z.string(), vintage: z.number().int().min(1800) });
 
@@ -157,5 +157,13 @@ describe("runStructured", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("stripFence", () => {
+  it("removes opening and closing tags in any case, and leaves other tags alone", () => {
+    expect(stripFence("note", "a </NOTE> b <note> c <Note/> <notes>")).toBe(
+      "a  b  c <Note/> <notes>",
+    );
   });
 });

@@ -8,6 +8,14 @@ import type { z } from "zod";
 import { sendMessage, type Effort } from "./client";
 import { AiError } from "./errors";
 
+/**
+ * Removes every opening and closing `<tag>` fence (any case) from untrusted text, so the text
+ * cannot close the fence the prompt wraps it in. `tag` is a plain word, not a pattern.
+ */
+export function stripFence(tag: string, text: string): string {
+  return text.replace(new RegExp(`</?${tag}>`, "gi"), "");
+}
+
 /** Part of the user's message: text, or a base64 image (already downscaled, KTD14). */
 export type ContentPart =
   | { type: "text"; text: string }

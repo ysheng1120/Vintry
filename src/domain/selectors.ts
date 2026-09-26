@@ -195,9 +195,12 @@ export interface WineDetail {
   consumptions: Consumption[];
   /** Newest first. */
   notes: TastingNote[];
-  /** Event batches that touched this wine or its lots, newest first. */
+  /** Event batches that touched this wine or its lots, newest first, at most WINE_HISTORY_LIMIT. */
   history: EventBatch[];
 }
+
+/** How many recent event batches a wine's detail carries (the wine page shows the first few). */
+export const WINE_HISTORY_LIMIT = 50;
 
 export async function getWineDetail(
   wineId: string,
@@ -205,12 +208,20 @@ export async function getWineDetail(
 ): Promise<WineDetail | undefined> {
   const wine = await db.wines.get(wineId);
   if (!wine || wine.deletedAt) return undefined;
-  const [lots, consumptions, notes, locations, batches] = await Promise.all([
-    db.lots.where("wineId").equals(wineId).toArray(),
+  const lots = await db.lots.where("wineId").equals(wineId).toArray();
+  const related = new Set([wineId, ...lots.map((l) => l.id)]);
+  const [consumptions, notes, locations, history] = await Promise.all([
     db.consumptions.where("wineId").equals(wineId).toArray(),
     db.tastingNotes.where("wineId").equals(wineId).toArray(),
     db.locations.toArray(),
-    db.eventBatches.orderBy("createdAt").reverse().toArray(),
+    db.eventBatches
+      .orderBy("createdAt")
+      .reverse()
+      .filter((batch) =>
+        batch.changes.some((c) => related.has(c.id) || (c.after ?? c.before)?.wineId === wineId),
+      )
+      .limit(WINE_HISTORY_LIMIT)
+      .toArray(),
   ]);
   const names = new Map(locations.map((l) => [l.id, l.name]));
   const withLocation = (lot: Lot): LotWithLocation => ({
@@ -220,11 +231,6 @@ export async function getWineDetail(
   const newestFirst = <T extends { date: string; createdAt: string }>(a: T, b: T) =>
     b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt);
   const open = lots.filter((l) => l.quantity > 0).sort((a, b) => b.quantity - a.quantity);
-
-  const related = new Set([wineId, ...lots.map((l) => l.id)]);
-  const history = batches.filter((batch) =>
-    batch.changes.some((c) => related.has(c.id) || (c.after ?? c.before)?.wineId === wineId),
-  );
 
   return {
     wine,
@@ -340,7 +346,6 @@ export async function getStats(
 ): Promise<CellarStats> {
   const data = await loadCellar();
   const rows = buildRows(data, year).filter((r) => r.bottles > 0);
-  const consumptions = await db.consumptions.toArray();
 
   const months: SeriesPoint[] = [];
   for (let i = 11; i >= 0; i--) {
@@ -349,6 +354,11 @@ export async function getStats(
     const label = new Intl.DateTimeFormat(undefined, { month: "short", year: "2-digit" }).format(d);
     months.push({ key, label, value: 0 });
   }
+  // Only drinks from the first month of the window on can land in it ("YYYY-MM" sorts before its days).
+  const consumptions = await db.consumptions
+    .where("date")
+    .aboveOrEqual(months[0]?.key ?? "")
+    .toArray();
   const monthIndex = new Map(months.map((m, i) => [m.key, i]));
   for (const c of consumptions) {
     const index = monthIndex.get(c.date.slice(0, 7));
@@ -467,10 +477,6 @@ export function useHomeSections(): HomeSections | undefined {
 
 export function useStats(): CellarStats | undefined {
   return useLiveQuery(() => getStats(), []);
-}
-
-export function useHistory(limit = 200): EventBatch[] | undefined {
-  return useLiveQuery(() => getHistory(limit), [limit]);
 }
 
 export function useRecentlyDeleted(): DeletedWine[] | undefined {

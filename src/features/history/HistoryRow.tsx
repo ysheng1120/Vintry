@@ -1,26 +1,18 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/useToast";
-import { checkUndo, undoBatch, type UndoCheck } from "../../domain/undo";
+import { undoBatch, type UndoCheck } from "../../domain/undo";
 import type { EventBatch } from "../../domain/types";
 import { relativeTime } from "./relativeTime";
 import { EVENT_SOURCE_LABELS } from "./sourceLabels";
 
-/** One row in the "All changes" timeline: summary, source, when, and an Undo button. */
-export function HistoryRow({ batch }: { batch: EventBatch }) {
+/**
+ * One row in the "All changes" timeline: summary, source, when, and an Undo button. `check` is
+ * this batch's `checkUndo` answer, computed for the whole list by the page.
+ */
+export function HistoryRow({ batch, check }: { batch: EventBatch; check?: UndoCheck }) {
   const { toast } = useToast();
-  const [check, setCheck] = useState<UndoCheck | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    checkUndo(batch.id).then((result) => {
-      if (alive) setCheck(result);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [batch.id, batch.undoneAt]);
 
   const reason = batch.undoneAt
     ? "This change has already been undone."

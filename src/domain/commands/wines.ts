@@ -6,7 +6,14 @@ import type { ChangeSet } from "../events";
 import { bottles, wineLabel } from "../labels";
 import { isMatchCandidate, wineKey } from "../match";
 import { LotSchema, WineSchema, type EventSource, type Wine, type WindowSource } from "../types";
-import { cleanText, CommandError, defineCommand, notFound, type CommandContext } from "./core";
+import {
+  cleanPatch,
+  cleanText,
+  CommandError,
+  defineCommand,
+  notFound,
+  type CommandContext,
+} from "./core";
 import { WineDraftSchema, WineFieldsSchema, type WineDraft } from "./schemas";
 import { pluralize } from "../../lib/format";
 
@@ -167,14 +174,7 @@ export const updateWineCommand = defineCommand({
   async execute({ wineId, patch }, changes) {
     const wine = await changes.get("wines", wineId);
     if (!wine || wine.deletedAt) throw notFound("wine");
-    const next: Partial<Wine> = {};
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined) continue;
-      (next as Record<string, unknown>)[key] =
-        typeof value === "string" && key !== "producer" && key !== "name"
-          ? cleanText(value)
-          : value;
-    }
+    const next = cleanPatch<Wine>(patch);
     const windowChanged = WINDOW_FIELDS.some((k) => k in next);
     if (windowChanged) {
       const from = next.windowFrom !== undefined ? next.windowFrom : wine.windowFrom;

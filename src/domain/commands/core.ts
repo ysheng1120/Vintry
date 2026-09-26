@@ -180,3 +180,17 @@ export function cleanText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
+
+/**
+ * Builds the stored fields for an edit patch: skips undefined fields and trims every text field
+ * (empty becomes null) except `producer` and `name`, which keep their validated value.
+ */
+export function cleanPatch<T>(patch: Record<string, unknown>): Partial<T> {
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    next[key] =
+      typeof value === "string" && key !== "producer" && key !== "name" ? cleanText(value) : value;
+  }
+  return next as Partial<T>;
+}

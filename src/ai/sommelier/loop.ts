@@ -216,8 +216,8 @@ async function runRounds(threadId: string, roundsDone: number, signal: AbortSign
     }
 
     rounds += 1;
-    const records: ToolRecord[] = [];
-    for (const block of toolUses) records.push(await handleToolUse(block));
+    // Tool calls only read (proposals become cards, written below), so they can run together.
+    const records = await Promise.all(toolUses.map(handleToolUse));
     await appendMessage(threadId, "assistant", content, {
       kind: "assistant",
       round: rounds,

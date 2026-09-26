@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
-import { StarRating } from "../../components/ui/StarRating";
 import { Stepper } from "../../components/ui/Stepper";
 import { Textarea } from "../../components/ui/Textarea";
 import { consumeBottles, type CommandResult } from "../../domain/commands";
@@ -11,6 +10,7 @@ import type { LotWithLocation } from "../../domain/selectors";
 import type { Wine } from "../../domain/types";
 import { toIsoDate } from "../../lib/format";
 import { errorMessage } from "../cellar/feedback";
+import { RatingField } from "./RatingField";
 import { isValidIsoDate } from "../add/draft";
 import { lotLabel } from "./lotLabel";
 import { SheetForm } from "./SheetForm";
@@ -98,12 +98,7 @@ export function DrinkSheet({ wine, lots, initialLotId, onClose, onDone }: DrinkS
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-ink" aria-hidden="true">
-          Rating
-        </span>
-        <StarRating value={rating} onChange={setRating} label="Rating" />
-      </div>
+      <RatingField value={rating} onChange={setRating} />
       <Field label="Tasting note" hint="Saved with this bottle in the wine's notes.">
         <Textarea
           value={note}

@@ -6,7 +6,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/useToast";
-import { CommandError } from "../../domain/commands/core";
+import { commandErrorMessage } from "../cellar/feedback";
 import { removeWishlistItem } from "../../domain/commands/wishlist";
 import { wineLabel } from "../../domain/labels";
 import { undoBatch } from "../../domain/undo";
@@ -48,7 +48,7 @@ export default function WishlistPage() {
       setRemoving(null);
     } catch (err) {
       toast({
-        title: err instanceof CommandError ? err.message : "Could not remove that item.",
+        title: commandErrorMessage(err, "Could not remove that item."),
         tone: "danger",
       });
     } finally {

@@ -8,8 +8,9 @@ import { consumeBottles } from "./commands/consumption";
 import { createLocation, deleteLocation } from "./commands/locations";
 import { moveBottles } from "./commands/lots";
 import { addTastingNote } from "./commands/notes";
+import { wipeAll } from "./commands/admin";
 import { addBottles, deleteWine } from "./commands/wines";
-import { checkUndo, undoBatch } from "./undo";
+import { checkUndo, checkUndoAll, undoBatch } from "./undo";
 
 async function seedLotOfSix() {
   await createLocation({ name: "Kitchen rack" });
@@ -177,5 +178,51 @@ describe("undoBatch", () => {
     expect(await db.wines.count()).toBe(1);
     expect(await undoBatch(batchId)).toMatchObject({ ok: true });
     expect(await db.wines.count()).toBe(40);
+  });
+});
+
+describe("checkUndoAll", () => {
+  beforeEach(resetDatabase);
+
+  it("gives the same answer as checkUndo for every batch", async () => {
+    // Batches from before the wipe are gone from the history: both report them missing.
+    await seedLotOfSix();
+    const beforeWipe = await db.eventBatches.toArray();
+    await wipeAll({});
+
+    // After the wipe: the wipe itself is blocked by the later changes.
+    const { cave, lot } = await seedLotOfSix();
+    const move = await moveBottles({ lotId: lot.id, quantity: 2, toLocationId: cave.id });
+    await consumeBottles({ lotId: lot.id, quantity: 1 }); // blocks the move
+    const note = await addTastingNote({ wineId: lot.wineId, text: "Lovely" });
+    await undoBatch(note.batchId!); // undone: no longer blocks anything
+    await createLocation({ name: "Garage" });
+    const garage = (await db.locations.where("name").equals("Garage").first())!;
+    await moveBottles({ lotId: lot.id, quantity: 1, toLocationId: garage.id });
+    await createLocation({ name: "Shed" });
+    const shed = (await db.locations.where("name").equals("Shed").first())!;
+    await deleteLocation({ locationId: shed.id }); // blocks creating the shed
+
+    const history = await db.eventBatches.orderBy("createdAt").reverse().toArray();
+    const batches = [...history, ...beforeWipe];
+    const all = await checkUndoAll(batches);
+
+    const expected = new Map();
+    for (const batch of batches) expected.set(batch.id, await checkUndo(batch.id));
+    expect(all).toEqual(expected);
+
+    // The sequence covers every kind of answer.
+    const reasons = [...all.values()].map((c) => (c.ok ? "ok" : c.reason));
+    expect(reasons).toContain("ok");
+    expect(reasons).toContain("This change has already been undone.");
+    expect(reasons).toContain("This change is no longer in the history.");
+    expect(reasons.some((r) => r.includes("touched your data"))).toBe(true);
+    expect(reasons.some((r) => r.includes("touched this lot"))).toBe(true);
+    expect(reasons.some((r) => r.includes("touched this location"))).toBe(true);
+    expect(all.get(move.batchId!)).toMatchObject({ ok: false });
+  });
+
+  it("returns an empty map for no batches", async () => {
+    expect((await checkUndoAll([])).size).toBe(0);
   });
 });

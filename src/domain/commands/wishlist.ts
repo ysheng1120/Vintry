@@ -2,7 +2,14 @@ import { z } from "zod";
 import { newId } from "../../lib/id";
 import { nowIso } from "../clock";
 import { ColourSchema, WishlistItemSchema, YearSchema, type WishlistItem } from "../types";
-import { cleanText, CommandError, defineCommand, notFound, type CommandContext } from "./core";
+import {
+  cleanPatch,
+  cleanText,
+  CommandError,
+  defineCommand,
+  notFound,
+  type CommandContext,
+} from "./core";
 import { WineDraftSchema } from "./schemas";
 import { addDrafts, addedSummary } from "./wines";
 
@@ -56,14 +63,7 @@ export const updateWishlistItemCommand = defineCommand({
   async execute({ itemId, patch }, changes) {
     const item = await changes.get("wishlist", itemId);
     if (!item) throw notFound("wishlist item");
-    const next: Partial<WishlistItem> = {};
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined) continue;
-      (next as Record<string, unknown>)[key] =
-        typeof value === "string" && key !== "producer" && key !== "name"
-          ? cleanText(value)
-          : value;
-    }
+    const next = cleanPatch<WishlistItem>(patch);
     const updated = await changes.update("wishlist", itemId, next);
     return { summary: `Edited ${itemLabel(updated)} on the wishlist` };
   },

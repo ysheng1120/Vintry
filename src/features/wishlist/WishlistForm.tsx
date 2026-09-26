@@ -6,7 +6,7 @@ import { Select } from "../../components/ui/Select";
 import { Sheet } from "../../components/ui/Sheet";
 import { Textarea } from "../../components/ui/Textarea";
 import { useToast } from "../../components/ui/useToast";
-import { CommandError } from "../../domain/commands/core";
+import { commandErrorMessage } from "../cellar/feedback";
 import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
 import { undoBatch } from "../../domain/undo";
 import { COLOUR_LABELS, COLOURS, type WishlistItem } from "../../domain/types";
@@ -92,7 +92,7 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
       });
       onClose();
     } catch (err) {
-      setError(err instanceof CommandError ? err.message : "Could not save that item.");
+      setError(commandErrorMessage(err, "Could not save that item."));
     } finally {
       setBusy(false);
     }

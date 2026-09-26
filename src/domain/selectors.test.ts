@@ -19,6 +19,7 @@ import {
   getWineDetail,
   getWishlist,
   useCellarList,
+  WINE_HISTORY_LIMIT,
 } from "./selectors";
 
 const YEAR = 2026;
@@ -237,6 +238,23 @@ describe("wine detail", () => {
     ]);
   });
 
+  it("keeps only the newest batches for this wine, newest first, up to the limit", async () => {
+    const { ridge, rose } = await seed();
+    const total = WINE_HISTORY_LIMIT + 5;
+    for (let i = 0; i < total; i++) {
+      setClock(new Date(Date.UTC(2026, 8, 10, 0, i)).toISOString());
+      await addTastingNote({ wineId: ridge.id, text: `Note ${i}` });
+      await addTastingNote({ wineId: rose.id, text: `Other ${i}` });
+    }
+
+    const history = (await getWineDetail(ridge.id, YEAR))?.history ?? [];
+    expect(history).toHaveLength(WINE_HISTORY_LIMIT);
+    expect(history.every((b) => b.summary.includes("Ridge"))).toBe(true);
+    const times = history.map((b) => b.createdAt);
+    expect(times).toEqual([...times].sort().reverse());
+    expect(times[0]?.slice(0, 16)).toBe(`2026-09-10T00:${total - 1}`);
+  });
+
   it("returns undefined for a missing or deleted wine", async () => {
     const { rose } = await seed();
     expect(await getWineDetail("missing")).toBeUndefined();
@@ -305,6 +323,17 @@ describe("stats", () => {
     expect(stats.drunkPerMonth[11]).toMatchObject({ key: "2026-09", value: 0 });
     expect(stats.drunkPerMonth[10]).toMatchObject({ key: "2026-08", value: 2 });
     expect(stats.drunkPerMonth.reduce((s, p) => s + p.value, 0)).toBe(2);
+  });
+
+  it("counts drinks from the first day of the twelve-month window", async () => {
+    const { ridge } = await seed();
+    const lot = (await db.lots.where({ wineId: ridge.id, quantity: 4 }).first())!;
+    await consumeBottles({ lotId: lot.id, quantity: 1, date: "2025-10-01" });
+    await consumeBottles({ lotId: lot.id, quantity: 1, date: "2025-09-30" });
+
+    const stats = await getStats(YEAR, new Date("2026-09-26T12:00:00Z"));
+    expect(stats.drunkPerMonth[0]).toMatchObject({ key: "2025-10", value: 1 });
+    expect(stats.drunkPerMonth.reduce((s, p) => s + p.value, 0)).toBe(1);
   });
 });
 

@@ -1,11 +1,16 @@
 import { useCallback } from "react";
 import { useToast } from "../../components/ui/useToast";
-import type { CommandResult } from "../../domain/commands";
+import { CommandError, type CommandResult } from "../../domain/commands";
 import { undoBatch } from "../../domain/undo";
 
 /** A plain-language message for a failed command or unexpected error. */
 export function errorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : "Something went wrong.";
+}
+
+/** A refused command's own message, or `fallback` for any other error. */
+export function commandErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof CommandError ? error.message : fallback;
 }
 
 /**

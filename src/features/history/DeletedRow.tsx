@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/useToast";
-import { CommandError } from "../../domain/commands/core";
+import { commandErrorMessage } from "../cellar/feedback";
 import { purgeDeleted, restoreWine } from "../../domain/commands/wines";
 import { undoBatch } from "../../domain/undo";
 import { formatDate } from "../../lib/format";
@@ -28,7 +28,7 @@ export function DeletedRow({ item }: { item: DeletedWine }) {
       });
     } catch (err) {
       toast({
-        title: err instanceof CommandError ? err.message : "Could not restore that wine.",
+        title: commandErrorMessage(err, "Could not restore that wine."),
         tone: "danger",
       });
     } finally {
@@ -43,7 +43,7 @@ export function DeletedRow({ item }: { item: DeletedWine }) {
       toast({ title: result.summary, tone: "success" });
     } catch (err) {
       toast({
-        title: err instanceof CommandError ? err.message : "Could not delete that wine.",
+        title: commandErrorMessage(err, "Could not delete that wine."),
         tone: "danger",
       });
     } finally {

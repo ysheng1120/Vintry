@@ -1,11 +1,9 @@
 import clsx from "clsx";
 import { Link } from "react-router";
-import { Badge } from "../../components/ui/Badge";
 import { ColorDot } from "../../components/ui/ColorDot";
 import { bottles, wineLabel } from "../../domain/labels";
 import type { CellarRow } from "../../domain/selectors";
-import { WINDOW_STATUS_LABELS } from "../../domain/window";
-import { badgeToneForStatus } from "./statusTone";
+import { StatusBadge } from "../cellar/StatusBadge";
 
 /** A compact card for one wine, used across Home's sections. */
 export function WineCard({ row, className }: { row: CellarRow; className?: string }) {
@@ -25,7 +23,7 @@ export function WineCard({ row, className }: { row: CellarRow; className?: strin
       <p className="min-w-0 flex-1 font-display font-semibold text-ink">{wineLabel(row.wine)}</p>
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm text-ink-muted">{bottles(row.bottles)}</span>
-        <Badge tone={badgeToneForStatus(row.status)}>{WINDOW_STATUS_LABELS[row.status]}</Badge>
+        <StatusBadge status={row.status} />
       </div>
     </Link>
   );

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
-import { StarRating } from "../../components/ui/StarRating";
 import { Textarea } from "../../components/ui/Textarea";
 import { TidyNoteButton } from "./TidyNoteButton";
 import { addTastingNote, type CommandResult } from "../../domain/commands";
@@ -9,6 +8,7 @@ import { wineLabel } from "../../domain/labels";
 import type { Wine } from "../../domain/types";
 import { toIsoDate } from "../../lib/format";
 import { errorMessage } from "../cellar/feedback";
+import { RatingField } from "./RatingField";
 import { isValidIsoDate } from "../add/draft";
 import { SheetForm } from "./SheetForm";
 
@@ -64,12 +64,7 @@ export function NoteSheet({ wine, onClose, onDone }: NoteSheetProps) {
       </Field>
       <TidyNoteButton text={text} onResult={setText} className="self-start" />
       <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium text-ink" aria-hidden="true">
-            Rating
-          </span>
-          <StarRating value={rating} onChange={setRating} label="Rating" />
-        </div>
+        <RatingField value={rating} onChange={setRating} />
         <Field label="Date" className="flex-1">
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>

@@ -21,17 +21,28 @@ const NOUNS: Record<RecordTableName, string> = {
 
 const key = (table: string, id: string) => `${table}:${id}`;
 
+const MISSING = "This change is no longer in the history.";
+const ALREADY_UNDONE = "This change has already been undone.";
+
 /**
  * The most recent later, not-undone batch that stands in the way of undoing `batch` (KTD7, R6):
  * one that touched a record this batch touched, one that points at a record this batch created
  * (undo would remove it), or one that removed a record this batch's restored rows point at.
  */
-async function findBlocker(
-  batch: EventBatch,
-): Promise<{ blocker: EventBatch; table: RecordTableName | null } | null> {
-  const later = (await db.eventBatches.where("createdAt").above(batch.createdAt).toArray())
-    .filter((b) => b.id !== batch.id && !b.undoneAt)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+async function findBlocker(batch: EventBatch): Promise<Blocker | null> {
+  const later = await db.eventBatches.where("createdAt").above(batch.createdAt).toArray();
+  return blockerAmong(batch, later);
+}
+
+type Blocker = { blocker: EventBatch; table: RecordTableName | null };
+
+const newestFirst = (a: EventBatch, b: EventBatch) => b.createdAt.localeCompare(a.createdAt);
+
+/** The blocker for `batch` among `candidates`, which must include every batch created after it. */
+function blockerAmong(batch: EventBatch, candidates: EventBatch[]): Blocker | null {
+  const later = candidates
+    .filter((b) => b.createdAt > batch.createdAt && b.id !== batch.id && !b.undoneAt)
+    .sort(newestFirst);
   if (later.length === 0) return null;
   const [newest] = later;
   // A restore or wipe replaced everything; anything done since would be lost.
@@ -59,28 +70,47 @@ async function findBlocker(
 
 async function check(batchId: string): Promise<{ batch?: EventBatch; result: UndoCheck }> {
   const batch = await db.eventBatches.get(batchId);
-  if (!batch) return { result: { ok: false, reason: "This change is no longer in the history." } };
+  if (!batch) return { result: { ok: false, reason: MISSING } };
   if (batch.undoneAt) {
-    return { batch, result: { ok: false, reason: "This change has already been undone." } };
+    return { batch, result: { ok: false, reason: ALREADY_UNDONE } };
   }
-  const found = await findBlocker(batch);
-  if (found) {
-    const noun = found.table ? `this ${NOUNS[found.table]}` : "your data";
-    return {
-      batch,
-      result: {
-        ok: false,
-        reason: `A later change touched ${noun} (${found.blocker.summary}). Undo that first.`,
-        blockingBatch: found.blocker,
-      },
-    };
-  }
-  return { batch, result: { ok: true } };
+  return { batch, result: checkFor(await findBlocker(batch)) };
+}
+
+function checkFor(found: Blocker | null): UndoCheck {
+  if (!found) return { ok: true };
+  const noun = found.table ? `this ${NOUNS[found.table]}` : "your data";
+  return {
+    ok: false,
+    reason: `A later change touched ${noun} (${found.blocker.summary}). Undo that first.`,
+    blockingBatch: found.blocker,
+  };
 }
 
 /** Whether a batch can be undone right now, without changing anything (for History). */
 export async function checkUndo(batchId: string): Promise<UndoCheck> {
   return (await check(batchId)).result;
+}
+
+/**
+ * `checkUndo` for many batches at once (History's list), keyed by batch id. Reads the stored
+ * batches from the oldest given one onwards in one query, then checks each in memory, so every
+ * answer matches `checkUndo` for that batch.
+ */
+export async function checkUndoAll(batches: EventBatch[]): Promise<Map<string, UndoCheck>> {
+  const checks = new Map<string, UndoCheck>();
+  if (batches.length === 0) return checks;
+  // Every given batch, as stored now, and every batch created after any of them.
+  const oldest = batches.map((b) => b.createdAt).sort()[0] ?? "";
+  const stored = await db.eventBatches.where("createdAt").aboveOrEqual(oldest).toArray();
+  const byId = new Map(stored.map((b) => [b.id, b]));
+  for (const { id } of batches) {
+    const batch = byId.get(id);
+    if (!batch) checks.set(id, { ok: false, reason: MISSING });
+    else if (batch.undoneAt) checks.set(id, { ok: false, reason: ALREADY_UNDONE });
+    else checks.set(id, checkFor(blockerAmong(batch, stored)));
+  }
+  return checks;
 }
 
 /**

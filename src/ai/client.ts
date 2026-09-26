@@ -163,10 +163,12 @@ export async function sendMessage(
   options: SendOptions = {},
 ): Promise<BetaMessage> {
   const usingSavedKey = options.apiKey === undefined;
-  const apiKey = usingSavedKey ? await readApiKey() : cleanKey(options.apiKey);
+  const [apiKey, model] = await Promise.all([
+    usingSavedKey ? readApiKey() : cleanKey(options.apiKey),
+    getSelectedModel(),
+  ]);
   if (apiKey === "") throw new AiError("no-key");
 
-  const model = await getSelectedModel();
   const params = buildParams(model, request);
   let receivedText = false;
   const onText = options.onText

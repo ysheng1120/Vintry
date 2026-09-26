@@ -14,6 +14,7 @@ import { createLocation, importRows } from "../../domain/commands";
 import { useLocations } from "../../domain/selectors";
 import { parseCsvFile } from "../../lib/csv";
 import { errorMessage, useCommandFeedback } from "../cellar/feedback";
+import { NEW_LOCATION } from "../add/draft";
 import { MappingEditor } from "./MappingEditor";
 import { detectImportSource, presetMapping, type CsvMapping, type ImportSourceId } from "./presets";
 import { buildImportRows, type ImportPreview } from "./rows";
@@ -26,7 +27,6 @@ interface ParsedFile {
   rows: Record<string, string>[];
 }
 
-const NEW_LOCATION = "__new__";
 const ACCEPT = ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain";
 
 function describeWineForRow(draft: NonNullable<ImportPreview["rows"][number]["draft"]>): string {

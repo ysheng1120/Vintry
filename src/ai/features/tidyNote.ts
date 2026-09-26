@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { runStructured } from "../structured";
+import { runStructured, stripFence } from "../structured";
 import { NO_INVENTED_FACTS } from "./scanLabel";
 
 /**
@@ -21,7 +21,7 @@ const SYSTEM = [
 ].join("\n");
 
 /** The note cannot close its own fence. */
-const fenced = (text: string) => text.replace(/<\/?note>/gi, "");
+const fenced = (text: string) => stripFence("note", text);
 
 /** Returns a tidy version of the note, or the original when nothing came back. Throws AiError. */
 export async function tidyNote(

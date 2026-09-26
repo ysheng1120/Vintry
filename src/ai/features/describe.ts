@@ -7,7 +7,7 @@ import {
   type BottleLotDraft,
   type PriceBasis,
 } from "../../features/add/draft";
-import { runStructured } from "../structured";
+import { runStructured, stripFence } from "../structured";
 import { knownFields, NO_INVENTED_FACTS, WINE_READING_FIELDS, wineDraftFields } from "./scanLabel";
 
 /**
@@ -54,7 +54,7 @@ const SYSTEM = [
 ].join("\n");
 
 /** The sentence cannot close its own fence. */
-const fenced = (text: string) => text.replace(/<\/?description>/gi, "");
+const fenced = (text: string) => stripFence("description", text);
 
 const cleanText = (value: string | null): string | undefined => value?.trim() || undefined;
 

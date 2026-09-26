@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 import { z } from "zod";
-import { runStructured } from "../structured";
+import { runStructured, stripFence } from "../structured";
 
 // U10's import flow calls suggestCsvMapping for generic CSV files when a key is set (KTD13).
 
@@ -85,7 +85,7 @@ const SYSTEM = [
 /** CSV text of the headers and sample rows; it cannot contain the closing fence. */
 function csvData(headers: string[], sampleRows: string[][]): string {
   const csv = Papa.unparse([headers, ...sampleRows.slice(0, CSV_SAMPLE_ROWS)]);
-  return csv.replace(/<\/?csv>/gi, "");
+  return stripFence("csv", csv);
 }
 
 /**

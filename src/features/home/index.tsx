@@ -11,7 +11,7 @@ import { useToast } from "../../components/ui/useToast";
 import { now } from "../../domain/clock";
 import { loadSampleCellar } from "../../domain/commands/sample";
 import { undoBatch } from "../../domain/undo";
-import { CommandError } from "../../domain/commands/core";
+import { commandErrorMessage } from "../cellar/feedback";
 import { formatMoney } from "../../domain/money";
 import { useHomeSections, type CellarRow, type HomeSections } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";
@@ -101,7 +101,7 @@ function EmptyCellar() {
       });
     } catch (err) {
       toast({
-        title: err instanceof CommandError ? err.message : "Could not load the sample cellar.",
+        title: commandErrorMessage(err, "Could not load the sample cellar."),
         tone: "danger",
       });
     }
