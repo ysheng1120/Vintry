@@ -1,0 +1,533 @@
+import { z } from "zod";
+import { db } from "../../db/db";
+import {
+  addBottlesCommand,
+  adjustQuantityCommand,
+  commands,
+  CommandError,
+  consumeBottlesCommand,
+  moveBottlesCommand,
+  setDrinkingWindowCommand,
+  updateWineCommand,
+  type Command,
+  type CommandName,
+  type CommandResult,
+  type WineDraft,
+} from "../../domain/commands";
+import { bottles, wineLabel } from "../../domain/labels";
+import { getCellarList } from "../../domain/selectors";
+import type { Lot, Wine } from "../../domain/types";
+import { pluralize } from "../../lib/format";
+import { openLotsByWine } from "./readTools";
+import type { Proposal, ProposalKind, StoredToolResult } from "./thread";
+
+/**
+ * Proposal tools (KTD11): each one is a registry command whose input schema becomes the tool
+ * schema. Calling one shows the collector a confirm card; nothing is written until they
+ * confirm. Lot tools also accept a wine id or the wine's name, and return candidates instead
+ * of guessing when that is ambiguous.
+ */
+
+const LOT_TARGET = {
+  lotId: z
+    .string()
+    .optional()
+    .describe("Lot id from the snapshot, search_cellar or get_wine. Preferred."),
+  wineId: z
+    .string()
+    .optional()
+    .describe("Wine id, when you do not know the lot. Several open lots return candidates."),
+  wineQuery: z
+    .string()
+    .optional()
+    .describe(
+      "What the collector called the wine, when you have no id. Several matching wines or lots return candidates; then ask which one.",
+    ),
+};
+
+export const proposalToolSchemas = {
+  propose_add_bottles: addBottlesCommand.input,
+  propose_consume: consumeBottlesCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
+  propose_move: moveBottlesCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
+  propose_adjust_quantity: adjustQuantityCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
+  propose_update_wine: updateWineCommand.input,
+  propose_set_drinking_window: setDrinkingWindowCommand.input,
+} as const;
+
+export type ProposalToolName = keyof typeof proposalToolSchemas;
+
+/** Which registry command each proposal tool runs, and its card kind. */
+export const PROPOSAL_TOOLS: Record<
+  ProposalToolName,
+  { command: CommandName; kind: ProposalKind }
+> = {
+  propose_add_bottles: { command: "addBottles", kind: "add" },
+  propose_consume: { command: "consumeBottles", kind: "consume" },
+  propose_move: { command: "moveBottles", kind: "move" },
+  propose_adjust_quantity: { command: "adjustQuantity", kind: "adjust" },
+  propose_update_wine: { command: "updateWine", kind: "update-wine" },
+  propose_set_drinking_window: { command: "setDrinkingWindow", kind: "set-window" },
+};
+
+const CONFIRM_NOTE =
+  "This only proposes the change: the collector sees a confirm card and nothing changes until they confirm. The tool result says whether it was applied.";
+
+export function proposalToolDescription(name: ProposalToolName): string {
+  const command = commands[PROPOSAL_TOOLS[name].command] as Command;
+  return `${command.description} ${CONFIRM_NOTE}`;
+}
+
+export function isProposalTool(name: string): name is ProposalToolName {
+  return Object.hasOwn(PROPOSAL_TOOLS, name);
+}
+
+/** A card ready to show, before it gets a status and session. */
+export type CardDraft = Pick<Proposal, "kind" | "command" | "input" | "title" | "lines" | "wineId">;
+
+export type Prepared =
+  { kind: "card"; card: CardDraft } | { kind: "result"; result: StoredToolResult };
+
+const result = (content: unknown, isError = false): Prepared => ({
+  kind: "result",
+  result: { content: typeof content === "string" ? content : JSON.stringify(content), isError },
+});
+
+// ---------- candidates ----------
+
+async function wineCandidates(wines: Wine[]) {
+  const lots = await openLotsByWine(wines.map((w) => w.id));
+  return wines.map((wine) => ({
+    wineId: wine.id,
+    wine: wineLabel(wine),
+    lots: lots.get(wine.id) ?? [],
+  }));
+}
+
+async function locationName(id: string | null): Promise<string> {
+  if (!id) return "no location";
+  return (await db.locations.get(id))?.name ?? "Unknown location";
+}
+
+function lotPlace(name: string, bin: string | null): string {
+  return bin ? `${name}, bin ${bin}` : name;
+}
+
+// ---------- lot targets ----------
+
+type LotTarget = { lotId?: string; wineId?: string; wineQuery?: string };
+
+/** The command input without the lot target fields (the card holds the resolved lot id). */
+function withoutTarget<T extends LotTarget>(input: T): Omit<T, keyof LotTarget> {
+  const rest: Record<string, unknown> = { ...input };
+  delete rest.lotId;
+  delete rest.wineId;
+  delete rest.wineQuery;
+  return rest as Omit<T, keyof LotTarget>;
+}
+type Resolved = { lot: Lot; wine: Wine } | { prepared: Prepared };
+
+async function resolveLot(target: LotTarget, { allowClosed = false } = {}): Promise<Resolved> {
+  if (target.lotId) {
+    const lot = await db.lots.get(target.lotId);
+    const wine = lot ? await db.wines.get(lot.wineId) : undefined;
+    if (!lot || !wine || wine.deletedAt) {
+      return {
+        prepared: result(
+          `No lot has id ${target.lotId}. Nothing was changed. Read the cellar again.`,
+          true,
+        ),
+      };
+    }
+    if (lot.quantity === 0 && !allowClosed) {
+      return {
+        prepared: result(`That lot of ${wineLabel(wine)} is empty. Nothing was changed.`, true),
+      };
+    }
+    return { lot, wine };
+  }
+
+  let wines: Wine[];
+  if (target.wineId) {
+    const wine = await db.wines.get(target.wineId);
+    if (!wine || wine.deletedAt) {
+      return { prepared: result(`No wine has id ${target.wineId}. Nothing was changed.`, true) };
+    }
+    wines = [wine];
+  } else if (target.wineQuery?.trim()) {
+    wines = (await getCellarList({ search: target.wineQuery })).map((row) => row.wine);
+    if (wines.length === 0) {
+      return {
+        prepared: result(
+          `No bottles in the cellar match "${target.wineQuery}". Nothing was changed.`,
+          true,
+        ),
+      };
+    }
+  } else {
+    return { prepared: result("Give lotId, wineId or wineQuery. Nothing was changed.", true) };
+  }
+
+  const candidates = await wineCandidates(wines);
+  const openLots = candidates.flatMap((c) => c.lots);
+  if (wines.length === 1 && openLots.length === 1) {
+    const [only] = openLots;
+    const lot = only ? await db.lots.get(only.lotId) : undefined;
+    if (lot && wines[0]) return { lot, wine: wines[0] };
+  }
+  if (openLots.length === 0) {
+    return {
+      prepared: result(
+        `${wineLabel(wines[0] as Wine)} has no bottles left. Nothing was changed.`,
+        true,
+      ),
+    };
+  }
+  const what =
+    wines.length > 1
+      ? `${pluralize(wines.length, "wine")} match`
+      : `${wineLabel(wines[0] as Wine)} has ${pluralize(openLots.length, "open lot")}`;
+  return {
+    prepared: result({
+      status: "needs_choice",
+      message: `${what}. Nothing was changed. Ask the collector which one they mean, then propose again with its lotId.`,
+      candidates,
+    }),
+  };
+}
+
+async function quantityChanged(lot: Lot, wine: Wine, expected: number): Promise<Prepared> {
+  return result({
+    status: "quantity_changed",
+    message: `This lot of ${wineLabel(wine)} now holds ${bottles(lot.quantity)}, not ${expected}. Nothing was changed. Check with the collector before proposing again.`,
+    candidates: await wineCandidates([wine]),
+  });
+}
+
+// ---------- preparing cards ----------
+
+function invalid(name: string, error: z.ZodError): Prepared {
+  const details = error.issues
+    .slice(0, 5)
+    .map((issue) => `${issue.path.join(".") || "input"} ${issue.message}`)
+    .join("; ");
+  return result(`Invalid input for ${name}: ${details}. Nothing was changed.`, true);
+}
+
+type In<N extends ProposalToolName> = z.output<(typeof proposalToolSchemas)[N]>;
+
+async function prepareConsume(input: In<"propose_consume">): Promise<Prepared> {
+  const resolved = await resolveLot(input);
+  if ("prepared" in resolved) return resolved.prepared;
+  const { lot, wine } = resolved;
+  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
+    return quantityChanged(lot, wine, input.expectedQuantity);
+  }
+  if (input.quantity > lot.quantity) {
+    return result(`Only ${bottles(lot.quantity)} left in that lot. Nothing was changed.`, true);
+  }
+  const place = lotPlace(await locationName(lot.locationId), lot.bin);
+  const lines = [
+    `From ${place}: ${lot.quantity} now, ${lot.quantity - input.quantity} after`,
+    ...(input.date ? [`Date: ${input.date}`] : []),
+    ...(input.rating != null ? [`Rating: ${input.rating}/100`] : []),
+    ...(input.occasion ? [`Occasion: ${input.occasion}`] : []),
+    ...(input.note ? [`Note: ${input.note}`] : []),
+  ];
+  return {
+    kind: "card",
+    card: {
+      kind: "consume",
+      command: "consumeBottles",
+      input: { ...withoutTarget(input), lotId: lot.id, expectedQuantity: lot.quantity },
+      title: `Drink ${bottles(input.quantity)} of ${wineLabel(wine)}`,
+      lines,
+      wineId: wine.id,
+    },
+  };
+}
+
+async function prepareMove(input: In<"propose_move">): Promise<Prepared> {
+  const resolved = await resolveLot(input);
+  if ("prepared" in resolved) return resolved.prepared;
+  const { lot, wine } = resolved;
+  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
+    return quantityChanged(lot, wine, input.expectedQuantity);
+  }
+  if (input.quantity > lot.quantity) {
+    return result(`Only ${bottles(lot.quantity)} left in that lot. Nothing was changed.`, true);
+  }
+  if (input.toLocationId && !(await db.locations.get(input.toLocationId))) {
+    const locations = await db.locations.toArray();
+    return result({
+      status: "unknown_location",
+      message: `No location has id ${input.toLocationId}. Nothing was changed.`,
+      locations: locations.map((l) => ({ locationId: l.id, name: l.name })),
+    });
+  }
+  const from = lotPlace(await locationName(lot.locationId), lot.bin);
+  const to = lotPlace(await locationName(input.toLocationId), input.bin ?? null);
+  const left = lot.quantity - input.quantity;
+  return {
+    kind: "card",
+    card: {
+      kind: "move",
+      command: "moveBottles",
+      input: { ...withoutTarget(input), lotId: lot.id, expectedQuantity: lot.quantity },
+      title: `Move ${bottles(input.quantity)} of ${wineLabel(wine)}`,
+      lines: [`From ${from} to ${to}`, ...(left > 0 ? [`${bottles(left)} stay at ${from}`] : [])],
+      wineId: wine.id,
+    },
+  };
+}
+
+async function prepareAdjust(input: In<"propose_adjust_quantity">): Promise<Prepared> {
+  const resolved = await resolveLot(input, { allowClosed: Boolean(input.lotId) });
+  if ("prepared" in resolved) return resolved.prepared;
+  const { lot, wine } = resolved;
+  if (input.expectedQuantity !== undefined && input.expectedQuantity !== lot.quantity) {
+    return quantityChanged(lot, wine, input.expectedQuantity);
+  }
+  if (input.quantity === lot.quantity) {
+    return result(`That lot already holds ${bottles(lot.quantity)}. Nothing was changed.`, true);
+  }
+  const place = lotPlace(await locationName(lot.locationId), lot.bin);
+  return {
+    kind: "card",
+    card: {
+      kind: "adjust",
+      command: "adjustQuantity",
+      input: { ...withoutTarget(input), lotId: lot.id, expectedQuantity: lot.quantity },
+      title: `Correct the count of ${wineLabel(wine)}`,
+      lines: [
+        `At ${place}: ${lot.quantity} now, ${input.quantity} after`,
+        "A correction, not recorded as drinking",
+      ],
+      wineId: wine.id,
+    },
+  };
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  producer: "Producer",
+  name: "Name",
+  vintage: "Vintage",
+  colour: "Colour",
+  country: "Country",
+  region: "Region",
+  appellation: "Appellation",
+  grapes: "Grapes",
+  bottleSize: "Bottle size (ml)",
+  windowFrom: "Drink from",
+  windowTo: "Drink to",
+  windowSource: "Window source",
+  windowNote: "Window note",
+  rating: "Your rating",
+  tags: "Tags",
+  notes: "Notes",
+};
+
+function show(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "none";
+  if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
+  return String(value);
+}
+
+async function liveWine(wineId: string): Promise<Wine | undefined> {
+  const wine = await db.wines.get(wineId);
+  return wine && !wine.deletedAt ? wine : undefined;
+}
+
+async function prepareUpdateWine(input: In<"propose_update_wine">): Promise<Prepared> {
+  const wine = await liveWine(input.wineId);
+  if (!wine) return result(`No wine has id ${input.wineId}. Nothing was changed.`, true);
+  const fields: Record<string, unknown> = { ...input.patch };
+  delete fields.thumbnail; // a label image cannot come from chat
+  const patch = Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key, value]) => value !== undefined && show(value) !== show(wine[key as keyof Wine]),
+    ),
+  );
+  const keys = Object.keys(patch);
+  if (keys.length === 0) return result("That would change nothing. Nothing was changed.", true);
+  return {
+    kind: "card",
+    card: {
+      kind: "update-wine",
+      command: "updateWine",
+      input: { wineId: wine.id, patch },
+      title: `Edit ${wineLabel(wine)}`,
+      lines: keys.map(
+        (key) =>
+          `${FIELD_LABELS[key] ?? key}: ${show(wine[key as keyof Wine])} → ${show(patch[key])}`,
+      ),
+      wineId: wine.id,
+    },
+  };
+}
+
+function rangeText(from: number | null, to: number | null): string {
+  return from === null && to === null ? "none" : `${from ?? "…"}–${to ?? "…"}`;
+}
+
+async function prepareSetWindow(input: In<"propose_set_drinking_window">): Promise<Prepared> {
+  const wine = await liveWine(input.wineId);
+  if (!wine) return result(`No wine has id ${input.wineId}. Nothing was changed.`, true);
+  if (input.from !== null && input.to !== null && input.to < input.from) {
+    return result("The window ends before it starts. Nothing was changed.", true);
+  }
+  const userSet =
+    wine.windowSource === "user" && (wine.windowFrom !== null || wine.windowTo !== null);
+  const lines = [
+    `Drinking window: ${rangeText(wine.windowFrom, wine.windowTo)} → ${rangeText(input.from, input.to)}`,
+    ...(input.source === "ai" ? ["Marked as an AI estimate"] : []),
+    ...(input.note ? [`Why: ${input.note}`] : []),
+    ...(userSet && input.source !== "user" ? ["Replaces the window you set yourself"] : []),
+  ];
+  return {
+    kind: "card",
+    card: {
+      kind: "set-window",
+      command: "setDrinkingWindow",
+      // Confirming the card is the collector's own go-ahead to replace their window.
+      input: { ...input, overwrite: true },
+      title: `Set the drinking window for ${wineLabel(wine)}`,
+      lines,
+      wineId: wine.id,
+    },
+  };
+}
+
+async function prepareAdd(input: In<"propose_add_bottles">): Promise<Prepared> {
+  for (const draft of input.drafts) {
+    if (draft.wineId && !(await liveWine(draft.wineId))) {
+      return result(`No wine has id ${draft.wineId}. Nothing was changed.`, true);
+    }
+  }
+  const count = input.drafts.reduce(
+    (sum, d) => sum + d.lots.reduce((s, lot) => s + lot.quantity, 0),
+    0,
+  );
+  return {
+    kind: "card",
+    card: {
+      kind: "add",
+      command: "addBottles",
+      input: { drafts: input.drafts },
+      title: `Add ${bottles(count)}`,
+      lines: input.drafts.map((d) =>
+        wineLabel({ producer: d.producer, name: d.name ?? "", vintage: d.vintage }),
+      ),
+      wineId: input.drafts.length === 1 ? (input.drafts[0]?.wineId ?? null) : null,
+    },
+  };
+}
+
+/** Validates a proposal tool call and builds its card, or returns a result without a card. */
+export async function prepareProposal(
+  name: ProposalToolName,
+  rawInput: unknown,
+): Promise<Prepared> {
+  const parsed = proposalToolSchemas[name].safeParse(rawInput);
+  if (!parsed.success) return invalid(name, parsed.error);
+  switch (name) {
+    case "propose_consume":
+      return prepareConsume(parsed.data as In<"propose_consume">);
+    case "propose_move":
+      return prepareMove(parsed.data as In<"propose_move">);
+    case "propose_adjust_quantity":
+      return prepareAdjust(parsed.data as In<"propose_adjust_quantity">);
+    case "propose_update_wine":
+      return prepareUpdateWine(parsed.data as In<"propose_update_wine">);
+    case "propose_set_drinking_window":
+      return prepareSetWindow(parsed.data as In<"propose_set_drinking_window">);
+    case "propose_add_bottles":
+      return prepareAdd(parsed.data as In<"propose_add_bottles">);
+  }
+}
+
+// ---------- applying a confirmed card ----------
+
+export type ApplyOutcome =
+  | { status: "applied"; result: CommandResult; toolResult: StoredToolResult }
+  | { status: "stale" | "failed"; reason: string; toolResult: StoredToolResult };
+
+/** The stored state after a change, for the tool result: touched lots and wines as saved. */
+async function storedState(res: CommandResult) {
+  const lots = (await db.lots.bulkGet(res.touched.lotIds)).filter((l) => l !== undefined);
+  const wines = (await db.wines.bulkGet(res.touched.wineIds)).filter((w) => w !== undefined);
+  const open = await openLotsByWine(wines.map((w) => w.id));
+  return {
+    status: "applied",
+    summary: res.summary,
+    lots: await Promise.all(
+      lots.map(async (lot) => ({
+        lotId: lot.id,
+        wineId: lot.wineId,
+        bottles: lot.quantity,
+        location: lot.locationId ? await locationName(lot.locationId) : null,
+        bin: lot.bin,
+      })),
+    ),
+    wines: wines.map((wine) => ({
+      wineId: wine.id,
+      wine: wineLabel(wine),
+      bottlesLeft: (open.get(wine.id) ?? []).reduce((sum, lot) => sum + lot.bottles, 0),
+      window: rangeText(wine.windowFrom, wine.windowTo),
+    })),
+  };
+}
+
+async function checkPreconditions(proposal: Proposal): Promise<StoredToolResult | null> {
+  const { input } = proposal;
+  if (typeof input.lotId === "string" && typeof input.expectedQuantity === "number") {
+    const lot = await db.lots.get(input.lotId);
+    const wine = lot ? await db.wines.get(lot.wineId) : undefined;
+    if (!lot || !wine || wine.deletedAt) {
+      return { content: "That lot no longer exists. Nothing was changed.", isError: true };
+    }
+    if (lot.quantity !== input.expectedQuantity) {
+      const stale = await quantityChanged(lot, wine, input.expectedQuantity);
+      return stale.kind === "result" ? stale.result : null;
+    }
+  }
+  if (typeof input.wineId === "string" && !(await liveWine(input.wineId))) {
+    return { content: "That wine no longer exists. Nothing was changed.", isError: true };
+  }
+  return null;
+}
+
+/**
+ * Re-checks a confirmed card against the stored data, then runs its command with source
+ * "ai-chat". Add cards take the drafts as the collector finished them in the card.
+ */
+export async function applyProposal(
+  proposal: Proposal,
+  drafts?: WineDraft[],
+): Promise<ApplyOutcome> {
+  const stale = await checkPreconditions(proposal);
+  if (stale) {
+    const reason = stale.isError ? stale.content : "The bottles changed since this was proposed.";
+    return { status: "stale", reason, toolResult: stale };
+  }
+  const command = commands[proposal.command as CommandName] as Command | undefined;
+  if (!command || command.humanOnly) {
+    const reason = "The sommelier cannot run this change.";
+    return { status: "failed", reason, toolResult: { content: reason, isError: true } };
+  }
+  const input = proposal.kind === "add" && drafts ? { drafts } : proposal.input;
+  try {
+    const res = await command.run(input, { source: "ai-chat" });
+    return {
+      status: "applied",
+      result: res,
+      toolResult: { content: JSON.stringify(await storedState(res)), isError: false },
+    };
+  } catch (error) {
+    if (!(error instanceof CommandError)) throw error;
+    return {
+      status: "failed",
+      reason: error.message,
+      toolResult: { content: `Not applied: ${error.message}`, isError: true },
+    };
+  }
+}
