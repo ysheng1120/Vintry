@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders.ts";
@@ -7,7 +8,14 @@ import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders.ts
 const BURGUNDY = "#6d1a36";
 const CREAM = "#f7f1e6";
 
+const { version } = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as {
+  version: string;
+};
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(version) },
   // The double-click launcher serves the built app with `vite preview`, so it gets the same
   // security headers as the hosted builds.
   preview: { port: LAUNCHER_PORT, strictPort: true, headers: SECURITY_HEADERS },
