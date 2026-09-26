@@ -2,11 +2,15 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders";
 
 const BURGUNDY = "#6d1a36";
 const CREAM = "#f7f1e6";
 
 export default defineConfig({
+  // The double-click launcher serves the built app with `vite preview`, so it gets the same
+  // security headers as the hosted builds.
+  preview: { port: LAUNCHER_PORT, strictPort: true, headers: SECURITY_HEADERS },
   plugins: [
     react(),
     tailwindcss(),
