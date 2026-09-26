@@ -221,10 +221,22 @@ export const purgeDeletedCommand = defineCommand({
   description:
     "Permanently remove wines deleted more than 30 days ago, with their bottles and notes.",
   humanOnly: "Permanently removes records; only the app (on start) or the user may do this.",
-  input: z.object({ olderThanDays: z.number().int().min(0).default(PURGE_AFTER_DAYS) }),
-  async execute({ olderThanDays }, changes) {
-    const cutoff = new Date(Date.parse(nowIso()) - olderThanDays * 86_400_000).toISOString();
-    const stale = (await db.wines.toArray()).filter((w) => w.deletedAt && w.deletedAt < cutoff);
+  input: z.object({
+    olderThanDays: z.number().int().min(0).default(PURGE_AFTER_DAYS),
+    /** Remove this one deleted wine now ("Delete forever"), whatever its age. */
+    wineId: z.string().min(1).optional(),
+  }),
+  async execute({ olderThanDays, wineId }, changes) {
+    let stale: Wine[];
+    if (wineId) {
+      const wine = await changes.get("wines", wineId);
+      if (!wine) throw notFound("wine");
+      if (!wine.deletedAt) throw new CommandError("Only deleted wines can be removed permanently.");
+      stale = [wine];
+    } else {
+      const cutoff = new Date(Date.parse(nowIso()) - olderThanDays * 86_400_000).toISOString();
+      stale = (await db.wines.toArray()).filter((w) => w.deletedAt && w.deletedAt < cutoff);
+    }
     for (const wine of stale) {
       for (const table of ["lots", "consumptions", "tastingNotes"] as const) {
         const ids = await db.table(table).where("wineId").equals(wine.id).primaryKeys();
@@ -246,5 +258,7 @@ export const deleteWine = (input: { wineId: string }, ctx?: CommandContext) =>
   deleteWineCommand.run(input, ctx);
 export const restoreWine = (input: { wineId: string }, ctx?: CommandContext) =>
   restoreWineCommand.run(input, ctx);
-export const purgeDeleted = (input: { olderThanDays?: number } = {}, ctx?: CommandContext) =>
-  purgeDeletedCommand.run(input, ctx);
+export const purgeDeleted = (
+  input: { olderThanDays?: number; wineId?: string } = {},
+  ctx?: CommandContext,
+) => purgeDeletedCommand.run(input, ctx);

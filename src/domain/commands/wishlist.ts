@@ -14,6 +14,8 @@ const WishlistFields = z.object({
   country: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
+  targetPrice: z.number().min(0).nullable().optional(),
+  currency: z.string().trim().length(3).nullable().optional(),
 });
 
 function itemLabel(item: Pick<WishlistItem, "producer" | "name" | "vintage">): string {
@@ -37,6 +39,8 @@ export const addWishlistItemCommand = defineCommand({
       country: cleanText(input.country),
       region: cleanText(input.region),
       notes: cleanText(input.notes),
+      targetPrice: input.targetPrice ?? null,
+      currency: cleanText(input.currency),
     });
     await changes.insert("wishlist", item);
     return { summary: `Added ${itemLabel(item)} to the wishlist` };

@@ -54,6 +54,8 @@ async function seedEveryTable() {
     country: "France",
     region: "Champagne",
     notes: null,
+    targetPrice: 180,
+    currency: "GBP",
     isSample: false,
   });
   await db.eventBatches.add({

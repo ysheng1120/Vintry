@@ -35,6 +35,14 @@ describe("wishlist", () => {
     expect(await db.wishlist.count()).toBe(0);
   });
 
+  it("keeps a target price and currency", async () => {
+    await addWishlistItem({ producer: "Krug", targetPrice: 250, currency: "GBP" });
+    const item = (await db.wishlist.toArray())[0]!;
+    expect(item).toMatchObject({ targetPrice: 250, currency: "GBP" });
+    await updateWishlistItem({ itemId: item.id, patch: { targetPrice: null } });
+    expect((await db.wishlist.get(item.id))?.targetPrice).toBeNull();
+  });
+
   it("turns a wishlist item into bottles in the cellar and removes it from the wishlist", async () => {
     await addWishlistItem({ producer: "Ridge", name: "Monte Bello", vintage: 2019, colour: "red" });
     const item = (await db.wishlist.toArray())[0]!;

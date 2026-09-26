@@ -190,6 +190,26 @@ describe("deleteWine, restoreWine and purgeDeleted", () => {
     expect(result.summary).toBe("Permanently removed 1 deleted wine");
   });
 
+  it("permanently removes one deleted wine on request, whatever its age", async () => {
+    await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 2 }] }] });
+    const wine = (await db.wines.toArray())[0]!;
+    await deleteWine({ wineId: wine.id });
+
+    const result = await purgeDeleted({ wineId: wine.id });
+    expect(await db.wines.get(wine.id)).toBeUndefined();
+    expect(await db.lots.where("wineId").equals(wine.id).count()).toBe(0);
+    expect(result.summary).toBe("Permanently removed 1 deleted wine");
+  });
+
+  it("refuses to permanently remove a wine that is not deleted", async () => {
+    await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 2 }] }] });
+    const wine = (await db.wines.toArray())[0]!;
+    await expect(purgeDeleted({ wineId: wine.id })).rejects.toThrow(
+      "Only deleted wines can be removed permanently.",
+    );
+    expect(await db.wines.get(wine.id)).toBeDefined();
+  });
+
   it("does nothing and records no batch when there is nothing to purge", async () => {
     const result = await purgeDeleted({});
     expect(result.batchId).toBeNull();

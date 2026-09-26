@@ -153,6 +153,9 @@ export const WishlistItemSchema = z.object({
   country: text(),
   region: text(),
   notes: text(),
+  /** Price the collector hopes to pay per bottle. */
+  targetPrice: z.number().min(0).nullable().default(null),
+  currency: text(),
   isSample: z.boolean().default(false),
 });
 export type WishlistItem = z.infer<typeof WishlistItemSchema>;
