@@ -40,6 +40,19 @@ describe("WishlistPage", () => {
     expect(await db.wishlist.count()).toBe(1);
   });
 
+  it("keeps a target price and shows it on the card", async () => {
+    renderWishlist();
+    await userEvent.click(await screen.findByRole("button", { name: "Add to wishlist" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Producer" }), "Salon");
+    await userEvent.type(screen.getByRole("spinbutton", { name: /Target price/ }), "120");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText(/Target .*120/)).toBeInTheDocument();
+    const item = (await db.wishlist.toArray())[0]!;
+    expect(item.targetPrice).toBe(120);
+    expect(item.currency).toMatch(/^[A-Z]{3}$/);
+  });
+
   it("edits an existing item", async () => {
     await addWishlistItem({ producer: "Salon", vintage: 2012, colour: "sparkling" });
     renderWishlist();

@@ -10,6 +10,7 @@ import { CommandError } from "../../domain/commands/core";
 import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
 import { undoBatch } from "../../domain/undo";
 import { COLOUR_LABELS, COLOURS, type WishlistItem } from "../../domain/types";
+import { useCurrency } from "../settings/currency";
 
 export interface WishlistFormProps {
   open: boolean;
@@ -26,6 +27,7 @@ interface FormState {
   country: string;
   region: string;
   notes: string;
+  targetPrice: string;
 }
 
 function stateFor(item: WishlistItem | null): FormState {
@@ -37,12 +39,14 @@ function stateFor(item: WishlistItem | null): FormState {
     country: item?.country ?? "",
     region: item?.region ?? "",
     notes: item?.notes ?? "",
+    targetPrice: item?.targetPrice?.toString() ?? "",
   };
 }
 
 /** Add or edit a wishlist item (R8). Saving shows an Undo toast, per KTD7. */
 export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
   const { toast } = useToast();
+  const defaultCurrency = useCurrency();
   const [form, setForm] = useState<FormState>(() => stateFor(item));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +77,8 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
         country: form.country,
         region: form.region,
         notes: form.notes,
+        targetPrice: form.targetPrice.trim() === "" ? null : Number(form.targetPrice),
+        currency: item?.currency ?? defaultCurrency,
       };
       const result = item
         ? await updateWishlistItem({ itemId: item.id, patch: fields })
@@ -143,6 +149,16 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
             <Input value={form.region} onChange={(e) => set("region", e.target.value)} />
           </Field>
         </div>
+        <Field label="Target price per bottle" hint={`In ${item?.currency ?? defaultCurrency}`}>
+          <Input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={form.targetPrice}
+            onChange={(e) => set("targetPrice", e.target.value)}
+          />
+        </Field>
         <Field label="Note">
           <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
         </Field>

@@ -5,6 +5,7 @@ import { ColorDot } from "../../components/ui/ColorDot";
 import { IconButton } from "../../components/ui/IconButton";
 import { buttonClasses } from "../../components/ui/buttonStyles";
 import { wineLabel } from "../../domain/labels";
+import { formatMoney } from "../../domain/money";
 import type { WishlistItem } from "../../domain/types";
 
 export interface WishlistCardProps {
@@ -30,6 +31,11 @@ export function WishlistCard({ item, onEdit, onRemove }: WishlistCardProps) {
           <IconButton label="Remove" icon={<Trash2 />} onClick={onRemove} />
         </div>
       </div>
+      {item.targetPrice != null && item.currency && (
+        <p className="text-sm text-ink">
+          Target {formatMoney(item.targetPrice, item.currency)} a bottle
+        </p>
+      )}
       {item.notes && <p className="text-sm text-ink-muted">{item.notes}</p>}
       <Link
         to={`/add/manual?fromWishlist=${item.id}`}

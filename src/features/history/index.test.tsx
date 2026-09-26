@@ -95,7 +95,7 @@ describe("HistoryPage", () => {
     expect(within(row).getByText(formatDate("2026-08-20"))).toBeInTheDocument();
   });
 
-  it("shows Restore (and not Delete forever) for a recently deleted wine", async () => {
+  it("restores a recently deleted wine", async () => {
     await addBottles({
       drafts: [{ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] }],
     });
@@ -106,12 +106,27 @@ describe("HistoryPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Recently deleted" }));
 
     const row = await findRowFor("Ridge 2019");
-    expect(within(row).getByRole("button", { name: "Restore" })).toBeInTheDocument();
-    expect(within(row).queryByRole("button", { name: /delete forever/i })).not.toBeInTheDocument();
-
     await userEvent.click(within(row).getByRole("button", { name: "Restore" }));
     await screen.findByText(/Restored Ridge 2019/);
     await waitFor(async () => expect((await db.wines.get(wine.id))?.deletedAt).toBeNull());
+  });
+
+  it("deletes a wine forever after confirmation", async () => {
+    await addBottles({
+      drafts: [{ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] }],
+    });
+    const wine = (await db.wines.toArray())[0]!;
+    await deleteWine({ wineId: wine.id });
+
+    renderHistory();
+    await userEvent.click(screen.getByRole("tab", { name: "Recently deleted" }));
+    const row = await findRowFor("Ridge 2019");
+    await userEvent.click(within(row).getByRole("button", { name: "Delete forever" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/removed for good/i)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete forever" }));
+    await waitFor(async () => expect(await db.wines.get(wine.id)).toBeUndefined());
   });
 
   it("shows empty messages for each tab with nothing to show", async () => {
