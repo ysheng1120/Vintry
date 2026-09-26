@@ -221,7 +221,8 @@ export const AiUsageSchema = z.object({
   outputTokens: z.number().int().min(0),
   cacheReadTokens: z.number().int().min(0).default(0),
   cacheWriteTokens: z.number().int().min(0).default(0),
-  costUsd: z.number().min(0),
+  /** Null when the served model has no known price. */
+  costUsd: z.number().min(0).nullable(),
 });
 export type AiUsage = z.infer<typeof AiUsageSchema>;
 

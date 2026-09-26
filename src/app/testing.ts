@@ -32,6 +32,10 @@ export const settingsModule = {
     settings.set(key, value);
     notifySettings();
   },
+  async deleteSetting(key: string): Promise<void> {
+    settings.delete(key);
+    notifySettings();
+  },
 };
 
 export function resetTestSettings(initial: Record<string, unknown> = {}) {
