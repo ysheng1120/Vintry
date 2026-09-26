@@ -29,6 +29,22 @@ describe("Add hub", () => {
     expect(tile(/Import a file/)).toHaveAttribute("href", "/import");
   });
 
+  it("lists the manual options first when there is no key", async () => {
+    renderHub();
+    await screen.findAllByText("Needs AI key");
+    const names = screen.getAllByRole("link").map((link) => link.textContent ?? "");
+    expect(names[0]).toMatch(/Add by hand/);
+    expect(names[1]).toMatch(/Import a file/);
+  });
+
+  it("lists scanning first when AI is ready", async () => {
+    await saveApiKey("sk-ant-test");
+    renderHub();
+    await waitFor(() => expect(screen.queryByText("Needs AI key")).not.toBeInTheDocument());
+    const names = screen.getAllByRole("link").map((link) => link.textContent ?? "");
+    expect(names[0]).toMatch(/Scan a label/);
+  });
+
   it("shows no note when AI is ready", async () => {
     await saveApiKey("sk-ant-test");
     renderHub();

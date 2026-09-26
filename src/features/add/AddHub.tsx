@@ -53,12 +53,18 @@ function aiNote(status: AiStatus): string | null {
 
 /** The four ways to add wine. AI tiles still open their page, which offers the manual path. */
 export default function AddHubPage() {
-  const note = aiNote(useAiStatus());
+  const status = useAiStatus();
+  const note = aiNote(status);
+  // Without a key, the ways that work today come first.
+  const options =
+    status.state === "no-key"
+      ? [...OPTIONS.filter((o) => !o.ai), ...OPTIONS.filter((o) => o.ai)]
+      : OPTIONS;
   return (
     <>
       <PageHeader title="Add wine" subtitle="Choose the quickest way for you." />
       <ul className="grid gap-4 md:grid-cols-2">
-        {OPTIONS.map(({ to, title, description, icon: Icon, ai }) => (
+        {options.map(({ to, title, description, icon: Icon, ai }) => (
           <li key={to}>
             <Link
               to={to}

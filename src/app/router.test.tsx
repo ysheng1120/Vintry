@@ -37,7 +37,9 @@ beforeEach(() => {
   // ScrollRestoration calls scrollTo, which jsdom does not implement.
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   installMatchMedia({ width: 1280 });
-  resetTestSettings();
+  // A returning collector: the first-run redirect (U11) sends only new collectors to /welcome,
+  // and the "What's new" notice stays quiet for the version already seen.
+  resetTestSettings({ onboardingDone: true, lastSeenVersion: __APP_VERSION__ });
   resetTestPwa();
 });
 

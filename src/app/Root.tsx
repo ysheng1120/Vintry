@@ -1,5 +1,10 @@
 import { Outlet, ScrollRestoration } from "react-router";
 import BackupReminder from "../features/backup/BackupReminder";
+import { FirstRunRedirect } from "../features/onboarding/FirstRunRedirect";
+import { SafariTabWarning } from "../features/onboarding/SafariTabWarning";
+import { SampleDataWatcher } from "../features/onboarding/SampleDataWatcher";
+import { TourHost } from "../features/tour/TourHost";
+import { WhatsNewNotice } from "../features/whats-new/WhatsNewNotice";
 import { BrandMark } from "./Brand";
 import { AppProviders } from "./providers";
 
@@ -8,7 +13,12 @@ export function Root() {
   return (
     <AppProviders>
       <ScrollRestoration />
+      <FirstRunRedirect />
       <BackupReminder />
+      <SampleDataWatcher />
+      <SafariTabWarning />
+      <WhatsNewNotice />
+      <TourHost />
       <Outlet />
     </AppProviders>
   );

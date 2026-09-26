@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /** The five main sections: nav link name, URL, and the page's H1. */
 const SECTIONS = [
@@ -8,6 +8,31 @@ const SECTIONS = [
   { link: "More", url: /\/more$/, heading: "More" },
   { link: "Home", url: /\/$/, heading: "Home" },
 ];
+
+/**
+ * A new browser opens onboarding first (U11). Finish it the quickest way (no install, no key,
+ * add by hand), then skip the tour that starts on Home, so each test begins as a returning user.
+ */
+async function finishOnboarding(page: Page) {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Welcome to Vintry" })).toBeVisible();
+  await page.getByRole("button", { name: "Get started" }).click();
+  // The install step: carry on in the browser tab.
+  await page.getByRole("button", { name: /^(Continue|Not now)$/ }).click();
+  await page.getByRole("button", { name: "Skip for now" }).click();
+  await page.getByRole("button", { name: /Add by hand/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Add by hand" })).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Home", exact: true })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Skip tour" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+test.beforeEach(async ({ page }) => {
+  await finishOnboarding(page);
+});
 
 // Runs in both Playwright projects: the wide window (sidebar) and the narrow 1024 × 700 window
 // (icon rail below 1100 px).
