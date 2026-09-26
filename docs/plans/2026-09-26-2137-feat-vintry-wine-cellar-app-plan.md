@@ -101,7 +101,7 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 - A new user with the sample cellar reaches a wine detail screen within 60 seconds of first launch.
 - A typed-sentence add takes one sentence plus one confirm tap.
 - A 300-row CellarTracker CSV imports in under 5 seconds without an AI key.
-- The app has no serious or critical axe-core accessibility violations on Home, Cellar, and Wine detail.
+- The app has no serious or critical axe-core accessibility violations on Home, Cellar, Wine detail, Add and Scan, Sommelier, and the welcome flow.
 
 ### Scope Boundaries
 
@@ -402,7 +402,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
   1. Cellar list: search box (producer, wine, region, grape), filter chips (colour, status, location, country), sort (name, vintage, window, recently added), and a Drunk filter. Rows show a colour dot, producer, cuvée, vintage, bottle count, and status badge. A virtualized list is not needed below 2,000 rows; render plainly.
   2. Wine detail: header, WindowBar with source badge, lots grouped by location, actions Drink, Move, Edit, Add note, Ask sommelier (links to U9 with context), Delete. Consumption and note history below.
   3. `DraftCard` is the single editable confirm card for new bottles, shared by manual add, scan, describe, wishlist conversion, and sommelier proposals. It shows the "Add to existing wine" state from the matcher.
-  4. Drink sheet: quantity stepper, date (default today), rating (1 to 5 stars in half steps or a 100-point toggle stored as 100-point), note, occasion. Move sheet: quantity and destination, with inline "New location".
+  4. Drink sheet: quantity stepper, date (default today), rating (1 to 5 stars in half steps, stored as 0 to 100), note, occasion. Move sheet: quantity and destination, with inline "New location".
   5. Every action shows an Undo toast.
 - **Test scenarios:**
   - Manual add with producer, name, vintage, quantity 3, and location creates the wine and shows it in the list with 3 bottles.
@@ -470,7 +470,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 - **Files:** `src/ai/features/scanLabel.ts`, `src/ai/features/describe.ts`, `src/ai/features/estimateWindow.ts`, `src/ai/features/tidyNote.ts`, `src/lib/image.ts`, `src/features/add/ScanPage.tsx`, `src/features/add/DescribePage.tsx`, `src/features/add/AddHub.tsx`, `src/features/wine/EstimateWindowButton.tsx`, `src/features/wine/BulkEstimate.tsx`, tests beside each.
 - **Approach:**
   1. Add hub: four large tiles (Scan label, Describe, Add by hand, Import CSV) with the AI tiles showing their no-key state.
-  2. Scan: drop zone plus Choose photo, and a webcam capture button when `getUserMedia` is available; downscale per KTD14, one structured request returning wine fields plus a per-field confidence (high or low); low-confidence fields are highlighted in the draft. Price and scores are never requested.
+  2. Scan: drop zone plus Choose photo, and a webcam capture button when `getUserMedia` is available (if camera access is denied or no camera exists, the button hides with a short note and the drop zone stays); downscale per KTD14, one structured request returning wine fields plus a per-field confidence (high or low); low-confidence fields are highlighted in the draft. Price and scores are never requested.
   3. Describe: textarea with a microphone button when the Web Speech API exists; the structured request returns one or more bottle drafts, quantity notes ("case assumed 12"), and a `priceBasis` of total, per bottle, or unclear.
   4. Window estimate: one wine (the Estimate button on wine detail, which U5 renders from `EstimateWindowButton.tsx`) or a batch of up to 20 wines per request, opened from a Home card "N wines have no drinking window" in the banner slot; the bulk flow shows the wine count and an estimated cost before running, runs in batches, can be cancelled, and resumes by skipping wines that got a window. Results apply through `setDrinkingWindow` with source `ai` and a one-line reason.
   5. Note tidy-up: returns a tidy note that fills the editor for the user to edit and save.
@@ -545,7 +545,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 - **Dependencies:** U8, U10 (for the start options), U7 (key step).
 - **Files:** `src/features/onboarding/`, `src/features/tour/Tour.tsx`, `src/features/tour/steps.ts`, `src/features/help/HelpPage.tsx`, `src/content/help.ts`, `src/features/whats-new/WhatsNewPage.tsx`, `src/content/changelog.ts`, `src/lib/platform.ts`, tests beside each.
 - **Approach:**
-  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, then an optional AI key step (why, how to get a key in three steps, a cost example computed from `src/ai/models.ts`, a one-line note that AI features send the text, photo, or cellar details they use to Anthropic, Test key, Skip), then "How do you want to start?" with the five options.
+  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, or manual menu instructions (the install icon in the address bar, or the menu's Install Vintry item) when the prompt event has not fired, then an optional AI key step (why, how to get a key in three steps, a cost example computed from `src/ai/models.ts`, a one-line note that AI features send the text, photo, or cellar details they use to Anthropic, Test key, Skip), then "How do you want to start?" with the five options.
   2. Tour: four to six coach marks anchored to the sidebar and key buttons (Home sections, Add, Cellar filters, Sommelier, More → Backup). Skippable, re-runnable from Help. No third-party tour library.
   3. Help page: short task-based sections ("Add a bottle", "Drink a bottle", "Move bottles", "Ask the sommelier", "Import from CellarTracker", "Back up and move to a new device", "Install the app", "Get an AI key", "Privacy"). The Privacy section states what each AI feature sends to Anthropic. Content lives in `src/content/help.ts`.
   4. Sample cellar banner on Home: "You are exploring a sample cellar" with Clear sample data; adding the first real wine asks whether to clear the samples.
@@ -576,7 +576,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
   - Offline add and drink persist after reload.
   - Import a CellarTracker fixture, export a backup, clear data, restore it, and see the same wine count.
   - A mocked sommelier turn recommends a bottle and a confirmed drink proposal lowers its count.
-  - Axe accessibility check (via `@axe-core/playwright`) reports no serious or critical issues on Home, Cellar, and Wine detail.
+  - Axe accessibility check (via `@axe-core/playwright`) reports no serious or critical issues on Home, Cellar, Wine detail, Add and Scan, Sommelier, and the welcome flow.
 - **Verification:** `npm run test:e2e` passes in CI on both projects.
 
 ---
