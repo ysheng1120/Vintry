@@ -33,7 +33,7 @@ import {
   writeFilters,
   type CellarFilters,
 } from "./filters";
-import BulkEstimate from "../wine/BulkEstimate";
+import BulkEstimate, { BulkEstimateButton } from "../wine/BulkEstimate";
 import { StatusBadge } from "./StatusBadge";
 
 const STATUS_CHIPS: WindowStatus[] = ["ready", "drink-soon", "hold", "past-peak", "none"];
@@ -106,10 +106,13 @@ export default function CellarPage() {
     <PageHeader
       title="Cellar"
       actions={
-        <Link to="/add" className={buttonClasses({ variant: "primary" })}>
-          <Plus aria-hidden="true" className="size-4" />
-          Add wine
-        </Link>
+        <>
+          <BulkEstimateButton />
+          <Link to="/add" className={buttonClasses({ variant: "primary" })}>
+            <Plus aria-hidden="true" className="size-4" />
+            Add wine
+          </Link>
+        </>
       }
     />
   );

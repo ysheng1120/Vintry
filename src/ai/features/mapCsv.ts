@@ -65,7 +65,9 @@ const FIELD_HINTS: Record<ImportField, string> = {
 };
 
 const SuggestionSchema = z.object({
-  mapping: z.array(z.object({ field: z.enum(IMPORT_FIELDS), header: z.string() })),
+  // A plain string, checked in code: the API does not enforce enums in structured output, and one
+  // unexpected field name must not fail the whole suggestion.
+  mapping: z.array(z.object({ field: z.string(), header: z.string() })),
   notes: z.array(z.string()),
 });
 
@@ -110,7 +112,12 @@ export async function suggestCsvMapping(
   const known = new Set(headers);
   const mapping: CsvMapping = {};
   const notes = [...result.notes];
+  const fields = new Set<string>(IMPORT_FIELDS);
   for (const { field, header } of result.mapping) {
+    if (!isImportField(field, fields)) {
+      notes.push(`Ignored a suggested field "${field}" that Vintry does not use.`);
+      continue;
+    }
     if (!known.has(header)) {
       notes.push(`Ignored a suggested column "${header}" that is not in the file.`);
       continue;
@@ -118,4 +125,8 @@ export async function suggestCsvMapping(
     if (mapping[field] === undefined) mapping[field] = header;
   }
   return { mapping, notes };
+}
+
+function isImportField(field: string, fields: Set<string>): field is ImportField {
+  return fields.has(field);
 }

@@ -1,6 +1,7 @@
 import { Camera, ChevronRight, FileSpreadsheet, MessageSquareText, PenLine } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router";
+import { useAiStatus, type AiStatus } from "../../ai/useAiStatus";
 import { PageHeader } from "../../components/ui/PageHeader";
 
 interface AddOption {
@@ -8,6 +9,8 @@ interface AddOption {
   title: string;
   description: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  /** Needs the AI key; the page itself explains how to add one (R18). */
+  ai?: boolean;
 }
 
 const OPTIONS: AddOption[] = [
@@ -16,12 +19,14 @@ const OPTIONS: AddOption[] = [
     title: "Scan a label",
     description: "Take or upload a photo and Vintry fills in the details.",
     icon: Camera,
+    ai: true,
   },
   {
     to: "/add/describe",
     title: "Describe it",
     description: "Type one sentence, like “6 bottles of 2019 Ridge Monte Bello”.",
     icon: MessageSquareText,
+    ai: true,
   },
   {
     to: "/add/manual",
@@ -37,13 +42,23 @@ const OPTIONS: AddOption[] = [
   },
 ];
 
-// Hub from the app shell (U4); the add units may refine it.
+/** A short note on an AI tile when AI cannot run; null when it is ready. */
+function aiNote(status: AiStatus): string | null {
+  if (status.state === "no-key") return "Needs AI key";
+  if (status.state === "unavailable") {
+    return navigator.onLine ? "AI unavailable right now" : "You are offline";
+  }
+  return null;
+}
+
+/** The four ways to add wine. AI tiles still open their page, which offers the manual path. */
 export default function AddHubPage() {
+  const note = aiNote(useAiStatus());
   return (
     <>
       <PageHeader title="Add wine" subtitle="Choose the quickest way for you." />
       <ul className="grid gap-4 md:grid-cols-2">
-        {OPTIONS.map(({ to, title, description, icon: Icon }) => (
+        {OPTIONS.map(({ to, title, description, icon: Icon, ai }) => (
           <li key={to}>
             <Link
               to={to}
@@ -58,6 +73,11 @@ export default function AddHubPage() {
               <span className="min-w-0 flex-1">
                 <span className="block font-display text-lg font-semibold text-ink">{title}</span>
                 <span className="mt-1 block text-sm text-ink-muted">{description}</span>
+                {ai && note && (
+                  <span className="mt-2 inline-block rounded-full bg-surface-muted px-2.5 py-0.5 text-xs font-medium text-ink-muted">
+                    {note}
+                  </span>
+                )}
               </span>
               <ChevronRight
                 aria-hidden="true"

@@ -64,6 +64,21 @@ describe("suggestCsvMapping", () => {
     expect(result.notes).toContain('Ignored a suggested column "Währung" that is not in the file.');
   });
 
+  it("ignores a field name Vintry does not know instead of failing", async () => {
+    ai.queueJson({
+      mapping: [
+        { field: "producer", header: "Weingut" },
+        { field: "sweetness", header: "Jahrgang" },
+      ],
+      notes: [],
+    });
+    const result = await suggestCsvMapping(HEADERS, ROWS);
+    expect(result.mapping).toEqual({ producer: "Weingut" });
+    expect(result.notes).toContain(
+      'Ignored a suggested field "sweetness" that Vintry does not use.',
+    );
+  });
+
   it("sends the headers and at most 20 sample rows fenced as data, at low effort", async () => {
     ai.queueJson({ mapping: [], notes: [] });
     const rows = Array.from({ length: 30 }, (_, i) => [`Producer ${i}`, "2019", "1", "10"]);

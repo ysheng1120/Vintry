@@ -15,7 +15,7 @@ const ROUTE_TITLES: [path: string, title: string | RegExp][] = [
   ["/wine/w1", "Wine details"],
   ["/add", "Add wine"],
   ["/add/scan", "Scan a label"],
-  ["/add/describe", "Describe a wine"],
+  ["/add/describe", "Describe it"],
   ["/add/manual", "Add by hand"],
   ["/import", "Import"],
   ["/sommelier", "Sommelier"],

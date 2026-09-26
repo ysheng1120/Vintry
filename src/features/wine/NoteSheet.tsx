@@ -3,6 +3,7 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { StarRating } from "../../components/ui/StarRating";
 import { Textarea } from "../../components/ui/Textarea";
+import { TidyNoteButton } from "./TidyNoteButton";
 import { addTastingNote, type CommandResult } from "../../domain/commands";
 import { wineLabel } from "../../domain/labels";
 import type { Wine } from "../../domain/types";
@@ -61,6 +62,7 @@ export function NoteSheet({ wine, onClose, onDone }: NoteSheetProps) {
           placeholder="Nose, palate, how it's developing…"
         />
       </Field>
+      <TidyNoteButton text={text} onResult={setText} className="self-start" />
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium text-ink" aria-hidden="true">
