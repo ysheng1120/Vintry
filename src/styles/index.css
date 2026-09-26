@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/*
+ * Dark mode:
+ * - `.dark` on <html> forces dark, `.light` on <html> forces light.
+ * - With neither class, the system preference (prefers-color-scheme) decides.
+ * The `dark:` variant below follows the same rules as the tokens.
+ */
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light), :root:not(.light) *) {
+      @slot;
+    }
+  }
+}
+
+/* ---------- Design tokens (light / default) ---------- */
+:root {
+  color-scheme: light;
+
+  /* Surfaces: cream paper */
+  --vt-bg: #f7f1e6;
+  --vt-surface: #fffaf2;
+  --vt-surface-muted: #efe6d6;
+  --vt-border: #e0d4c1;
+
+  /* Ink: warm neutral text */
+  --vt-ink: #231c1a;
+  --vt-ink-muted: #5f5550;
+  --vt-ink-subtle: #8a7f78;
+
+  /* Brand: deep burgundy */
+  --vt-primary: #6d1a36;
+  --vt-primary-hover: #58132b;
+  --vt-primary-soft: #f1dfe3;
+  --vt-on-primary: #fffaf2;
+
+  /* Accent: aged gold */
+  --vt-accent: #a8762c;
+  --vt-on-accent: #fffaf2;
+
+  /* Status */
+  --vt-success: #2f6b3f;
+  --vt-warning: #9a5b00;
+  --vt-danger: #b3261e;
+
+  --vt-ring: #6d1a36;
+  --vt-shadow: 0 1px 2px rgb(35 28 26 / 0.06), 0 2px 8px rgb(35 28 26 / 0.06);
+}
+
+/* ---------- Dark tokens ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+
+    --vt-bg: #17120f;
+    --vt-surface: #211a17;
+    --vt-surface-muted: #2b221e;
+    --vt-border: #3a2f2a;
+
+    --vt-ink: #efe7dc;
+    --vt-ink-muted: #b8ac9f;
+    --vt-ink-subtle: #8c8076;
+
+    --vt-primary: #d9738f;
+    --vt-primary-hover: #e48ba3;
+    --vt-primary-soft: #3a1e27;
+    --vt-on-primary: #1c1215;
+
+    --vt-accent: #d8a95a;
+    --vt-on-accent: #1c1215;
+
+    --vt-success: #7cc08f;
+    --vt-warning: #e0a85a;
+    --vt-danger: #f08a80;
+
+    --vt-ring: #d9738f;
+    --vt-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+  }
+}
+
+:root.dark {
+  color-scheme: dark;
+
+  --vt-bg: #17120f;
+  --vt-surface: #211a17;
+  --vt-surface-muted: #2b221e;
+  --vt-border: #3a2f2a;
+
+  --vt-ink: #efe7dc;
+  --vt-ink-muted: #b8ac9f;
+  --vt-ink-subtle: #8c8076;
+
+  --vt-primary: #d9738f;
+  --vt-primary-hover: #e48ba3;
+  --vt-primary-soft: #3a1e27;
+  --vt-on-primary: #1c1215;
+
+  --vt-accent: #d8a95a;
+  --vt-on-accent: #1c1215;
+
+  --vt-success: #7cc08f;
+  --vt-warning: #e0a85a;
+  --vt-danger: #f08a80;
+
+  --vt-ring: #d9738f;
+  --vt-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+/* ---------- Tailwind theme mapping ---------- */
+@theme inline {
+  --color-bg: var(--vt-bg);
+  --color-surface: var(--vt-surface);
+  --color-surface-muted: var(--vt-surface-muted);
+  --color-border: var(--vt-border);
+
+  --color-ink: var(--vt-ink);
+  --color-ink-muted: var(--vt-ink-muted);
+  --color-ink-subtle: var(--vt-ink-subtle);
+
+  --color-primary: var(--vt-primary);
+  --color-primary-hover: var(--vt-primary-hover);
+  --color-primary-soft: var(--vt-primary-soft);
+  --color-on-primary: var(--vt-on-primary);
+
+  --color-accent: var(--vt-accent);
+  --color-on-accent: var(--vt-on-accent);
+
+  --color-success: var(--vt-success);
+  --color-warning: var(--vt-warning);
+  --color-danger: var(--vt-danger);
+
+  --color-ring: var(--vt-ring);
+  --shadow-card: var(--vt-shadow);
+
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display text-ink;
+    letter-spacing: -0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--vt-ring);
+    outline-offset: 2px;
+  }
+}

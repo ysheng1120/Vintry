@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Vintry">
+  <defs>
+    <clipPath id="bowl">
+      <path d="M168 96H344C352 212 318 276 256 288C194 276 160 212 168 96Z"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#f7f1e6"/>
+  <g fill="none" stroke="#6d1a36" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="150" y="186" width="212" height="120" fill="#6d1a36" stroke="none" clip-path="url(#bowl)"/>
+    <path d="M168 96H344C352 212 318 276 256 288C194 276 160 212 168 96Z"/>
+    <path d="M256 288V404"/>
+    <path d="M188 412H324"/>
+  </g>
+  <path d="M206 212C208 232 216 250 230 262" fill="none" stroke="#f7f1e6" stroke-width="12" stroke-linecap="round" opacity="0.55"/>
+</svg>
