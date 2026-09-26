@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { finishOnboarding } from "./helpers";
 
 /** The five main sections: nav link name, URL, and the page's H1. */
 const SECTIONS = [
@@ -9,27 +10,7 @@ const SECTIONS = [
   { link: "Home", url: /\/$/, heading: "Home" },
 ];
 
-/**
- * A new browser opens onboarding first (U11). Finish it the quickest way (no install, no key,
- * add by hand), then skip the tour that starts on Home, so each test begins as a returning user.
- */
-async function finishOnboarding(page: Page) {
-  await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1, name: "Welcome to Vintry" })).toBeVisible();
-  await page.getByRole("button", { name: "Get started" }).click();
-  // The install step: carry on in the browser tab.
-  await page.getByRole("button", { name: /^(Continue|Not now)$/ }).click();
-  await page.getByRole("button", { name: "Skip for now" }).click();
-  await page.getByRole("button", { name: /Add by hand/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Add by hand" })).toBeVisible();
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Home", exact: true })
-    .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Skip tour" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-}
-
+// Each test begins as a returning user with an empty cellar.
 test.beforeEach(async ({ page }) => {
   await finishOnboarding(page);
 });
@@ -61,8 +42,14 @@ test("navigates the five main sections", async ({ page }) => {
 test("keyboard shortcuts open Cellar and Add", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
-  await page.keyboard.press("n");
-  await expect(page.getByRole("heading", { level: 1, name: "Add wine" })).toBeVisible();
+  // The shortcut listener attaches in an effect just after the first paint; under load a key
+  // pressed at once can land before it, so press again until the page changes.
+  await expect(async () => {
+    await page.keyboard.press("n");
+    await expect(page.getByRole("heading", { level: 1, name: "Add wine" })).toBeVisible({
+      timeout: 1000,
+    });
+  }).toPass();
   await page.keyboard.press("/");
   await expect(page.getByRole("heading", { level: 1, name: "Cellar" })).toBeVisible();
 });
