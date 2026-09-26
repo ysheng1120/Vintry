@@ -70,6 +70,23 @@ export function notFound(what: string): CommandError {
   return new CommandError(`That ${what} no longer exists.`, "not-found");
 }
 
+type CommitListener = (result: CommandResult) => void;
+const commitListeners = new Set<CommitListener>();
+
+/**
+ * Subscribes to committed changes (a batch was written). The app shell uses this to ask the
+ * browser for persistent storage after the first real write (R23). Returns an unsubscribe function.
+ */
+export function onCommandCommitted(listener: CommitListener): () => void {
+  commitListeners.add(listener);
+  return () => commitListeners.delete(listener);
+}
+
+function notifyCommitted(result: CommandResult) {
+  if (result.batchId === null) return;
+  for (const listener of commitListeners) listener(result);
+}
+
 /** Tables every recorded command may write, in one transaction. */
 const COMMAND_TABLES = () => [
   db.wines,
@@ -111,7 +128,7 @@ export function defineCommand<S extends z.ZodType>(spec: RecordedSpec<S>): Comma
     async run(rawInput, ctx) {
       const input = parseInput(spec.input, rawInput);
       const source = ctx?.source ?? spec.defaultSource ?? "user";
-      return db.transaction("rw", COMMAND_TABLES(), async () => {
+      const result = await db.transaction("rw", COMMAND_TABLES(), async () => {
         const changes = new ChangeSet();
         const { summary } = await spec.execute(input, changes, { source });
         const list = changes.list();
@@ -133,6 +150,8 @@ export function defineCommand<S extends z.ZodType>(spec: RecordedSpec<S>): Comma
         if (spec.countsAsChange !== false) await bumpChangesSinceBackup();
         return { batchId, touched: touchedFromChanges(list), summary };
       });
+      if (spec.countsAsChange !== false) notifyCommitted(result);
+      return result;
     },
   };
 }

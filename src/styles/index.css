@@ -4,6 +4,8 @@
  * Dark mode:
  * - `.dark` on <html> forces dark, `.light` on <html> forces light.
  * - With neither class, the system preference (prefers-color-scheme) decides.
+ * ThemeController (src/app/ThemeController.tsx) always sets one of the two classes once the app
+ * runs; the media query covers the moment before JavaScript loads.
  * The `dark:` variant below follows the same rules as the tokens.
  */
 @custom-variant dark {
@@ -22,36 +24,71 @@
   color-scheme: light;
 
   /* Surfaces: cream paper */
-  --vt-bg: #f7f1e6;
-  --vt-surface: #fffaf2;
-  --vt-surface-muted: #efe6d6;
-  --vt-border: #e0d4c1;
+  --vt-bg: #f6f0e6;
+  --vt-surface: #fffbf5;
+  --vt-surface-muted: #efe7da;
+  --vt-surface-sunken: #ebe5dc;
+  --vt-border: #e2d6c3;
+  --vt-border-strong: #cbbba4;
+  --vt-overlay: rgb(34 26 23 / 0.42);
 
-  /* Ink: warm neutral text */
-  --vt-ink: #231c1a;
-  --vt-ink-muted: #5f5550;
-  --vt-ink-subtle: #8a7f78;
+  /* Ink: warm neutral text (all pass WCAG AA on --vt-bg) */
+  --vt-ink: #221a17;
+  --vt-ink-muted: #5c524c;
+  --vt-ink-subtle: #756a62;
 
   /* Brand: deep burgundy */
   --vt-primary: #6d1a36;
   --vt-primary-hover: #58132b;
-  --vt-primary-soft: #f1dfe3;
+  --vt-primary-soft: #f3e3e7;
   --vt-on-primary: #fffaf2;
 
-  /* Accent: aged gold */
+  /* Accent: aged gold (decorative); --vt-accent-ink is for text */
   --vt-accent: #a8762c;
+  --vt-accent-ink: #7c5415;
+  --vt-accent-soft: #f5ead6;
   --vt-on-accent: #fffaf2;
 
-  /* Status */
-  --vt-success: #2f6b3f;
-  --vt-warning: #9a5b00;
-  --vt-danger: #b3261e;
+  /* Feedback */
+  --vt-success: #2e6a3e;
+  --vt-success-soft: #e2efe4;
+  --vt-warning: #855000;
+  --vt-warning-soft: #f8ebd2;
+  --vt-danger: #a3291f;
+  --vt-danger-hover: #87211a;
+  --vt-danger-soft: #f7e1dd;
+  --vt-info: #2f5d8a;
+  --vt-info-soft: #e3ebf4;
+
+  /* Drinking-window status tones (R4) */
+  --vt-status-hold: #2f5d8a;
+  --vt-status-hold-soft: #e3ebf4;
+  --vt-status-ready: #2e6a3e;
+  --vt-status-ready-soft: #e2efe4;
+  --vt-status-soon: #855000;
+  --vt-status-soon-soft: #f8ebd2;
+  --vt-status-past: #a3291f;
+  --vt-status-past-soft: #f7e1dd;
+  --vt-status-none: #5f5751;
+  --vt-status-none-soft: #ebe5dc;
+
+  /* Wine colours (dots, bars) */
+  --vt-wine-red: #8b1e32;
+  --vt-wine-white: #e6d68a;
+  --vt-wine-rose: #eea0b0;
+  --vt-wine-sparkling: #d1b24f;
+  --vt-wine-dessert: #b9791f;
+  --vt-wine-fortified: #5e2a1c;
+  --vt-wine-orange: #e0773a;
 
   --vt-ring: #6d1a36;
-  --vt-shadow: 0 1px 2px rgb(35 28 26 / 0.06), 0 2px 8px rgb(35 28 26 / 0.06);
+  --vt-shadow: 0 1px 2px rgb(34 26 23 / 0.05), 0 2px 8px rgb(34 26 23 / 0.05);
+  --vt-shadow-raised: 0 2px 4px rgb(34 26 23 / 0.06), 0 8px 24px rgb(34 26 23 / 0.08);
+  --vt-shadow-overlay: 0 8px 16px rgb(34 26 23 / 0.1), 0 24px 64px rgb(34 26 23 / 0.18);
 }
 
 /* ---------- Dark tokens ---------- */
+/* Same values twice: once for "system" (media query) and once for the forced `.dark` class. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
     color-scheme: dark;
@@ -59,26 +96,58 @@
     --vt-bg: #17120f;
     --vt-surface: #211a17;
     --vt-surface-muted: #2b221e;
+    --vt-surface-sunken: #1c1613;
     --vt-border: #3a2f2a;
+    --vt-border-strong: #54463e;
+    --vt-overlay: rgb(0 0 0 / 0.6);
 
     --vt-ink: #efe7dc;
     --vt-ink-muted: #b8ac9f;
-    --vt-ink-subtle: #8c8076;
+    --vt-ink-subtle: #9c9086;
 
-    --vt-primary: #d9738f;
-    --vt-primary-hover: #e48ba3;
+    --vt-primary: #cf7f8f;
+    --vt-primary-hover: #db95a2;
     --vt-primary-soft: #3a1e27;
     --vt-on-primary: #1c1215;
 
     --vt-accent: #d8a95a;
+    --vt-accent-ink: #e2b872;
+    --vt-accent-soft: #352818;
     --vt-on-accent: #1c1215;
 
     --vt-success: #7cc08f;
-    --vt-warning: #e0a85a;
+    --vt-success-soft: #1c2d22;
+    --vt-warning: #e5b067;
+    --vt-warning-soft: #352818;
     --vt-danger: #f08a80;
+    --vt-danger-hover: #f5a39b;
+    --vt-danger-soft: #3a201d;
+    --vt-info: #8db6e0;
+    --vt-info-soft: #1e2a37;
 
-    --vt-ring: #d9738f;
+    --vt-status-hold: #8db6e0;
+    --vt-status-hold-soft: #1e2a37;
+    --vt-status-ready: #7cc08f;
+    --vt-status-ready-soft: #1c2d22;
+    --vt-status-soon: #e5b067;
+    --vt-status-soon-soft: #352818;
+    --vt-status-past: #f08a80;
+    --vt-status-past-soft: #3a201d;
+    --vt-status-none: #b3a99f;
+    --vt-status-none-soft: #2b2521;
+
+    --vt-wine-red: #c9485e;
+    --vt-wine-white: #e8d88f;
+    --vt-wine-rose: #f0a9b8;
+    --vt-wine-sparkling: #dcbf5f;
+    --vt-wine-dessert: #d49434;
+    --vt-wine-fortified: #a0583f;
+    --vt-wine-orange: #ec8a4f;
+
+    --vt-ring: #cf7f8f;
     --vt-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+    --vt-shadow-raised: 0 2px 4px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+    --vt-shadow-overlay: 0 8px 16px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.5);
   }
 }
 
@@ -88,26 +157,58 @@
   --vt-bg: #17120f;
   --vt-surface: #211a17;
   --vt-surface-muted: #2b221e;
+  --vt-surface-sunken: #1c1613;
   --vt-border: #3a2f2a;
+  --vt-border-strong: #54463e;
+  --vt-overlay: rgb(0 0 0 / 0.6);
 
   --vt-ink: #efe7dc;
   --vt-ink-muted: #b8ac9f;
-  --vt-ink-subtle: #8c8076;
+  --vt-ink-subtle: #9c9086;
 
-  --vt-primary: #d9738f;
-  --vt-primary-hover: #e48ba3;
+  --vt-primary: #cf7f8f;
+  --vt-primary-hover: #db95a2;
   --vt-primary-soft: #3a1e27;
   --vt-on-primary: #1c1215;
 
   --vt-accent: #d8a95a;
+  --vt-accent-ink: #e2b872;
+  --vt-accent-soft: #352818;
   --vt-on-accent: #1c1215;
 
   --vt-success: #7cc08f;
-  --vt-warning: #e0a85a;
+  --vt-success-soft: #1c2d22;
+  --vt-warning: #e5b067;
+  --vt-warning-soft: #352818;
   --vt-danger: #f08a80;
+  --vt-danger-hover: #f5a39b;
+  --vt-danger-soft: #3a201d;
+  --vt-info: #8db6e0;
+  --vt-info-soft: #1e2a37;
 
-  --vt-ring: #d9738f;
+  --vt-status-hold: #8db6e0;
+  --vt-status-hold-soft: #1e2a37;
+  --vt-status-ready: #7cc08f;
+  --vt-status-ready-soft: #1c2d22;
+  --vt-status-soon: #e5b067;
+  --vt-status-soon-soft: #352818;
+  --vt-status-past: #f08a80;
+  --vt-status-past-soft: #3a201d;
+  --vt-status-none: #b3a99f;
+  --vt-status-none-soft: #2b2521;
+
+  --vt-wine-red: #c9485e;
+  --vt-wine-white: #e8d88f;
+  --vt-wine-rose: #f0a9b8;
+  --vt-wine-sparkling: #dcbf5f;
+  --vt-wine-dessert: #d49434;
+  --vt-wine-fortified: #a0583f;
+  --vt-wine-orange: #ec8a4f;
+
+  --vt-ring: #cf7f8f;
   --vt-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+  --vt-shadow-raised: 0 2px 4px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.35);
+  --vt-shadow-overlay: 0 8px 16px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.5);
 }
 
 /* ---------- Tailwind theme mapping ---------- */
@@ -115,7 +216,10 @@
   --color-bg: var(--vt-bg);
   --color-surface: var(--vt-surface);
   --color-surface-muted: var(--vt-surface-muted);
+  --color-surface-sunken: var(--vt-surface-sunken);
   --color-border: var(--vt-border);
+  --color-border-strong: var(--vt-border-strong);
+  --color-overlay: var(--vt-overlay);
 
   --color-ink: var(--vt-ink);
   --color-ink-muted: var(--vt-ink-muted);
@@ -127,19 +231,77 @@
   --color-on-primary: var(--vt-on-primary);
 
   --color-accent: var(--vt-accent);
+  --color-accent-ink: var(--vt-accent-ink);
+  --color-accent-soft: var(--vt-accent-soft);
   --color-on-accent: var(--vt-on-accent);
 
   --color-success: var(--vt-success);
+  --color-success-soft: var(--vt-success-soft);
   --color-warning: var(--vt-warning);
+  --color-warning-soft: var(--vt-warning-soft);
   --color-danger: var(--vt-danger);
+  --color-danger-hover: var(--vt-danger-hover);
+  --color-danger-soft: var(--vt-danger-soft);
+  --color-info: var(--vt-info);
+  --color-info-soft: var(--vt-info-soft);
+
+  --color-hold: var(--vt-status-hold);
+  --color-hold-soft: var(--vt-status-hold-soft);
+  --color-ready: var(--vt-status-ready);
+  --color-ready-soft: var(--vt-status-ready-soft);
+  --color-soon: var(--vt-status-soon);
+  --color-soon-soft: var(--vt-status-soon-soft);
+  --color-past: var(--vt-status-past);
+  --color-past-soft: var(--vt-status-past-soft);
+  --color-none: var(--vt-status-none);
+  --color-none-soft: var(--vt-status-none-soft);
+
+  --color-wine-red: var(--vt-wine-red);
+  --color-wine-white: var(--vt-wine-white);
+  --color-wine-rose: var(--vt-wine-rose);
+  --color-wine-sparkling: var(--vt-wine-sparkling);
+  --color-wine-dessert: var(--vt-wine-dessert);
+  --color-wine-fortified: var(--vt-wine-fortified);
+  --color-wine-orange: var(--vt-wine-orange);
 
   --color-ring: var(--vt-ring);
   --shadow-card: var(--vt-shadow);
+  --shadow-raised: var(--vt-shadow-raised);
+  --shadow-overlay: var(--vt-shadow-overlay);
 
   --font-sans:
     system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+
+  --animate-toast-in: toast-in 180ms ease-out;
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-dialog-in: dialog-in 180ms ease-out;
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      transform: scale(0.97);
+      opacity: 0;
+    }
+  }
 }
 
 /* ---------- Base ---------- */
@@ -147,11 +309,14 @@
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    background-color: var(--vt-bg);
   }
 
   body {
     @apply bg-bg font-sans text-ink antialiased;
     min-height: 100dvh;
+    font-size: 15px;
+    line-height: 1.55;
   }
 
   h1,
@@ -159,10 +324,36 @@
   h3 {
     @apply font-display text-ink;
     letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  ::selection {
+    background: var(--vt-primary-soft);
+    color: var(--vt-ink);
   }
 
   :focus-visible {
     outline: 2px solid var(--vt-ring);
     outline-offset: 2px;
+  }
+
+  /* Number fields use the Stepper buttons instead of the browser spinners. */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
   }
 }

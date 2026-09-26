@@ -11,9 +11,21 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Vintry</title>
+    <!-- Paper background before the stylesheet loads, so dark windows do not flash white. -->
+    <style>
+      html {
+        background: #f6f0e6;
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: #17120f;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Vintry needs JavaScript to run. Please turn it on and reload.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

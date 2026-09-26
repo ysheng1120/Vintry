@@ -2,7 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
-import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders";
+import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders.ts";
 
 const BURGUNDY = "#6d1a36";
 const CREAM = "#f7f1e6";
@@ -16,8 +16,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "prompt",
-      // Emit registerSW.js as a file (not inline) so it satisfies `script-src 'self'`.
-      injectRegister: "script",
+      // The app registers the service worker itself (src/app/pwaRegister.ts, for the update prompt).
+      injectRegister: false,
       // Public icons are already matched by workbox.globPatterns; avoid duplicate precache entries.
       includeManifestIcons: false,
       manifest: {
