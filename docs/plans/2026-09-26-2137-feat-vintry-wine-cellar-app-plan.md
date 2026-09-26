@@ -238,7 +238,8 @@ scripts/                ai-eval.ts, icon generation
 flowchart TB
   U1 --> U2 --> U3
   U1 --> U4
-  U1 --> U7
+  U2 --> U7
+  U4 --> U7
   U3 --> U5
   U4 --> U5
   U3 --> U6
@@ -292,7 +293,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 | U4 | App shell, design system, routing, PWA update | `src/app/`, `src/components/ui/` | U1 |
 | U5 | Cellar, wine detail, manual add and edit, drink, move, locations | `src/features/cellar/`, `wine/`, `add/`, `locations/` | U3, U4 |
 | U6 | Home, History, Wishlist, Stats | `src/features/home/`, `history/`, `wishlist/`, `stats/` | U3, U4 |
-| U7 | AI foundation and Settings | `src/ai/`, `src/features/settings/` | U1 |
+| U7 | AI foundation and Settings | `src/ai/`, `src/features/settings/` | U2, U4 |
 | U8 | AI add flows, windows, note helper | `src/ai/features/`, `src/features/add/` | U5, U7 |
 | U9 | Sommelier chat | `src/ai/sommelier/`, `src/features/sommelier/` | U5, U7 |
 | U10 | Import, export, backup, restore | `src/lib/csv.ts`, `src/features/import/`, `src/features/backup/` | U3, U4 |
@@ -443,7 +444,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 
 - **Goal:** A safe, observable AI client that every AI feature shares, and the Settings screen.
 - **Requirements:** R18, R19, R25, KTD2, KTD3.
-- **Dependencies:** U1.
+- **Dependencies:** U2 (its `settings` and `aiUsage` tables and `src/db/settings.ts`), U4 (UI primitives).
 - **Files:** `src/ai/client.ts`, `src/ai/models.ts`, `src/ai/errors.ts`, `src/ai/usage.ts`, `src/ai/structured.ts`, `src/ai/fake.ts`, `src/ai/useAiStatus.ts`, `src/features/settings/`, tests beside each.
 - **Approach:**
   1. `client.ts` builds the SDK client from the stored key with `dangerouslyAllowBrowser: true`; no module imports the key directly.
