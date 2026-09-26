@@ -14,7 +14,7 @@ execution: code
 - **Objective:** An independent wine collector can open Vintry in minutes, record their cellar with little typing, know what to drink and when, and ask an AI sommelier about their own bottles, while their data stays safe on their own device.
 - **Means:** A local-first installable web app (PWA) with all data in the browser and AI through the collector's own Claude API key, called directly from the browser (KTD1, KTD2, KTD5).
 - **Authority:** The Product Contract requirements (R-IDs) win on product behavior. KTDs win on mechanism. Units carry unit-local detail only.
-- **Execution profile:** Greenfield. U1 to U4 are foundations and run first. Feature units U5 to U11 then run in parallel waves (see Sequencing). U12 closes with end-to-end journeys and docs.
+- **Execution profile:** Greenfield. U1 to U4 are foundations and run first (U3 after U2). Feature units U5 to U11, including U7, then run in parallel waves (see Sequencing). U12 closes with end-to-end journeys and docs.
 - **Stop conditions:** Stop and report if the Claude API refuses direct browser calls with the `dangerouslyAllowBrowser` client option, or if IndexedDB is not available in the target browsers. Both are confirmed today (see Sources).
 - **Who finishes:** An autonomous pipeline implements, reviews, and pushes. The collector decides on the merge and on where to host.
 
@@ -101,7 +101,7 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 - A new user with the sample cellar reaches a wine detail screen within 60 seconds of first launch.
 - A typed-sentence add takes one sentence plus one confirm tap.
 - A 300-row CellarTracker CSV imports in under 5 seconds without an AI key.
-- The app scores no Lighthouse accessibility issue above "minor" on Home, Cellar, and Wine detail.
+- The app has no serious or critical axe-core accessibility violations on Home, Cellar, and Wine detail.
 
 ### Scope Boundaries
 
@@ -249,6 +249,7 @@ flowchart TB
   U4 --> U10
   U5 --> U9
   U7 --> U9
+  U7 --> U11
   U8 --> U11
   U10 --> U11
   U5 --> U12
@@ -257,7 +258,7 @@ flowchart TB
   U11 --> U12
 ```
 
-Wave A: U1, then U2 with U3 and U4 in parallel. Wave B: U5, U6, U7, U10 in parallel. Wave C: U8 and U9 in parallel. Wave D: U11. Wave E: U12. U4 registers every route; the orchestrator adds one stub file per route and per cross-unit component (for example `src/features/wine/EstimateWindowButton.tsx`) before each wave and assigns every file to exactly one unit, so parallel units never write the same file.
+Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 needs U2's schema). Wave B: U5, U6, U7, U10 in parallel. Wave C: U8 and U9 in parallel. Wave D: U11. Wave E: U12. U4 registers every route; the orchestrator adds one stub file per route and per cross-unit component (for example `src/features/wine/EstimateWindowButton.tsx`) before each wave and assigns every file to exactly one unit, so parallel units never write the same file.
 
 ### Risks
 
@@ -295,7 +296,7 @@ Wave A: U1, then U2 with U3 and U4 in parallel. Wave B: U5, U6, U7, U10 in paral
 | U8 | AI add flows, windows, note helper | `src/ai/features/`, `src/features/add/` | U5, U7 |
 | U9 | Sommelier chat | `src/ai/sommelier/`, `src/features/sommelier/` | U5, U7 |
 | U10 | Import, export, backup, restore | `src/lib/csv.ts`, `src/features/import/`, `src/features/backup/` | U3, U4 |
-| U11 | Onboarding, tour, Help, sample cellar, What's New | `src/features/onboarding/`, `tour/`, `help/`, `whats-new/` | U8, U10 |
+| U11 | Onboarding, tour, Help, sample cellar, What's New | `src/features/onboarding/`, `tour/`, `help/`, `whats-new/` | U7, U8, U10 |
 | U12 | End-to-end journeys, parity test, setup docs | `e2e/`, `README.md`, `docs/SETUP.md` | U5, U6, U9, U11 |
 
 ### U1. Project scaffold, launcher, deploy config
@@ -424,7 +425,7 @@ Wave A: U1, then U2 with U3 and U4 in parallel. Wave B: U5, U6, U7, U10 in paral
 - **Files:** `src/features/home/`, `src/features/history/`, `src/features/wishlist/`, `src/features/stats/`, `src/components/ui/BarChart.tsx`, tests beside each.
 - **Approach:**
   1. Home: greeting with counts, sections Ready now, Drink soon, Past peak, Coming into window this year, Recently added, and cost by currency. Empty states link to Add and to the sample cellar. A banner slot hosts the backup reminder (U10) and the sample-data banner (U11).
-  2. History: a timeline of event batches with plain-language summaries ("Drank 1 × Ridge Monte Bello 2019"), per-item Undo per KTD7, a Consumption log filter, and Recently deleted with Restore.
+  2. History: a timeline of event batches with plain-language summaries ("Drank 1 × Ridge Monte Bello 2019"), per-item Undo per KTD7, a Consumption log filter, and Recently deleted with Restore and "Delete forever" (the human-only `purgeDeleted` command for one wine).
   3. Wishlist: add by hand (producer, wine, vintage, note, target price), mark bought converts through `DraftCard`.
   4. Stats: SVG bar charts for bottles by colour, country, vintage decade, and window status, and bottles drunk per month for the last 12 months. Each chart has a table fallback for screen readers.
 - **Test scenarios:**
@@ -523,7 +524,7 @@ Wave A: U1, then U2 with U3 and U4 in parallel. Wave B: U5, U6, U7, U10 in paral
 - **Approach:**
   1. Import steps: pick file, detect preset from headers (CellarTracker, Vivino, or generic), show mapping (editable; AI suggestion button for generic with a key), choose a default location and currency, preview the first 20 rows with issues flagged, then import in one command batch with source `import` that undo can reverse.
   2. Parsing per KTD13. Duplicate wines within the file and against the cellar merge into lots through the matcher.
-  3. Backup page: last backup time, Export backup (JSON), Export CSV, Restore from backup (typed confirmation "REPLACE"), safety snapshots list with Restore, and on Chromium "Choose a backup folder" for one-tap dated backups (newest 10 kept, per KTD15).
+  3. Backup page: last backup time, Export backup (JSON), Export CSV, Restore from backup (typed confirmation "REPLACE"), safety snapshots list with Restore, "Delete all data" (typed confirmation "DELETE", takes a safety snapshot first, uses the human-only `wipeAll` command), and on Chromium "Choose a backup folder" for one-tap dated backups (newest 10 kept, per KTD15).
   4. Reminder: counts changes since last backup and days since last backup; shows the Home banner per R22 with Back up now and Later (snoozes 3 days).
 - **Test scenarios:**
   - A CellarTracker fixture with Latin-1 accents ("Château", "Côte-Rôtie") imports with correct characters.
