@@ -5,6 +5,7 @@
  *   vi.mock("../db/settings", async () => (await import("./testing")).settingsModule);
  */
 import { useSyncExternalStore } from "react";
+import { SETTING_KEYS } from "../db/settingKeys";
 
 // ---- settings: an in-memory key/value store with live updates ----
 const settings = new Map<string, unknown>();
@@ -36,6 +37,7 @@ export const settingsModule = {
     settings.delete(key);
     notifySettings();
   },
+  SETTING_KEYS,
 };
 
 export function resetTestSettings(initial: Record<string, unknown> = {}) {

@@ -1,17 +1,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 
-/** Known setting keys. Other units may add their own string keys. */
-export const SETTING_KEYS = {
-  apiKey: "apiKey",
-  model: "model",
-  currency: "currency",
-  theme: "theme",
-  onboardingDone: "onboardingDone",
-  tourDone: "tourDone",
-  lastBackupAt: "lastBackupAt",
-  changesSinceBackup: "changesSinceBackup",
-} as const;
+import { SETTING_KEYS } from "./settingKeys";
+
+export { SETTING_KEYS };
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const row = await db.settings.get(key);

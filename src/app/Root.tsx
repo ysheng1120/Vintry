@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration } from "react-router";
+import BackupReminder from "../features/backup/BackupReminder";
 import { BrandMark } from "./Brand";
 import { AppProviders } from "./providers";
 
@@ -7,6 +8,7 @@ export function Root() {
   return (
     <AppProviders>
       <ScrollRestoration />
+      <BackupReminder />
       <Outlet />
     </AppProviders>
   );

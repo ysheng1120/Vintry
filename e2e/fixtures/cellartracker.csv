@@ -1,0 +1,4 @@
+iWine,Type,Color,Category,Vintage,Wine,Locale,Producer,Varietal,MasterVarietal,Designation,Vineyard,Country,Region,SubRegion,Appellation,Quantity,Pending,Size,Price,Valuation,BeginConsume,EndConsume,Location,Bin
+100001,Wine,Red,Red Wine,2015,Grand Vin,France,Château Margaux,Cabernet Sauvignon,Cabernet Sauvignon,,,France,Bordeaux,Medoc,Margaux,3,0,750ml,120.00,150.00,2022,2035,Cellar,A1
+100002,Wine,Red,Red Wine,1001,Cuvée Non Vintage,France,Domaine de la Côte-Rôtie,Syrah,Syrah,,,France,Rhône,,Côte-Rôtie,2,0,750ml,45.50,,9999,9999,Kitchen Rack,B2
+100003,Wine,White,White Wine,2019,Les Pucelles,France,Domaine Leflaive,Chardonnay,Chardonnay,,,France,Burgundy,Côte de Beaune,Puligny-Montrachet,1,0,750ml,210.00,260.00,2021,2027,Cellar,A2
