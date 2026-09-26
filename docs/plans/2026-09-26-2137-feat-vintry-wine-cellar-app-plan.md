@@ -51,7 +51,7 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 - R6. Any change can be undone in one tap from a toast or from the History screen, when no later change touched the same records.
 - R7. The user can define locations (for example "Kitchen rack", "EuroCave A") with optional bin text on each lot.
 - R8. The user can keep a wishlist and turn a wishlist item into an added wine.
-- R9. Home shows ready now, drink soon, past peak, recently added, bottle and wine counts, and cellar cost grouped by currency with no exchange conversion.
+- R9. Home shows ready now, drink soon, past peak, recently added, bottle and wine counts, cellar cost grouped by currency with no exchange conversion, and a "No drinking window yet (N)" section that offers setting windows by hand and, with a key, estimating them all with AI.
 - R10. Stats show bottles by colour, country, region, vintage, and window status, and consumption over time.
 
 **AI assistance (requires the user's key)**
@@ -77,7 +77,7 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 **Setup, launch, and learning**
 
 - R25. The app runs with no account, no server, and no configuration. The AI key is optional and can be added at any time.
-- R26. A non-technical user can start the app by double-clicking a launcher file on macOS or Windows, or by opening a hosted link, and can install it as an app icon in the Dock or taskbar. Windows and macOS desktops are the only target platforms for now.
+- R26. A non-technical user can start the app by double-clicking a launcher file on macOS or Windows (the main path), or by opening a hosted link (which updates itself), and can install it as an app icon in the Dock or taskbar. Windows and macOS desktops are the only target platforms for now.
 - R27. A setup guide explains hosting the app for free from a private repo (Cloudflare Pages or Netlify) in a few clicks, and how to get a Claude API key.
 - R28. First launch runs a short onboarding: welcome, optional AI key with a test button and cost note, and a choice of how to start (scan, describe, add by hand, import, or sample cellar). In Safari on macOS, onboarding asks the user to add the app to the Dock first (or use Chrome or Edge), because Safari can evict data of sites that are not used for 7 days and keeps Dock-app data apart from tab data.
 - R29. A brief guided tour (four to six steps) points out the main screens after onboarding, and a Help page ("How to use Vintry") can be opened at any time from More.
@@ -402,8 +402,9 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
   1. Cellar list: search box (producer, wine, region, grape), filter chips (colour, status, location, country), sort (name, vintage, window, recently added), and a Drunk filter. Rows show a colour dot, producer, cuvée, vintage, bottle count, and status badge. A virtualized list is not needed below 2,000 rows; render plainly.
   2. Wine detail: header, WindowBar with source badge, lots grouped by location, actions Drink, Move, Edit, Add note, Ask sommelier (links to U9 with context), Delete. Consumption and note history below.
   3. `DraftCard` is the single editable confirm card for new bottles, shared by manual add, scan, describe, wishlist conversion, and sommelier proposals. It shows the "Add to existing wine" state from the matcher.
-  4. Drink sheet: quantity stepper, date (default today), rating (1 to 5 stars in half steps, stored as 0 to 100), note, occasion. Move sheet: quantity and destination, with inline "New location".
-  5. Every action shows an Undo toast.
+  4. The manual form includes optional "Drink from" and "Drink to" years (source `user`).
+  5. Drink sheet: quantity stepper, date (default today), rating (1 to 5 stars in half steps, stored as 0 to 100), note, occasion. Move sheet: quantity and destination, with inline "New location".
+  6. Every action shows an Undo toast.
 - **Test scenarios:**
   - Manual add with producer, name, vintage, quantity 3, and location creates the wine and shows it in the list with 3 bottles.
   - Manual add of an existing wine shows "Add to existing wine" and adds a lot.
@@ -424,13 +425,14 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 - **Dependencies:** U3, U4.
 - **Files:** `src/features/home/`, `src/features/history/`, `src/features/wishlist/`, `src/features/stats/`, `src/components/ui/BarChart.tsx`, tests beside each.
 - **Approach:**
-  1. Home: greeting with counts, sections Ready now, Drink soon, Past peak, Coming into window this year, Recently added, and cost by currency. Empty states link to Add and to the sample cellar. A banner slot hosts the backup reminder (U10) and the sample-data banner (U11).
+  1. Home: greeting with counts, sections Ready now, Drink soon, Past peak, Coming into window this year, No drinking window yet (with "Set windows" opening the cellar filtered to No window, and "Estimate all with AI" opening U8's bulk flow when a key exists), Recently added, and cost by currency. Empty states link to Add and to the sample cellar. A banner slot hosts the backup reminder (U10) and the sample-data banner (U11).
   2. History: a timeline of event batches with plain-language summaries ("Drank 1 × Ridge Monte Bello 2019"), per-item Undo per KTD7, a Consumption log filter, and Recently deleted with Restore and "Delete forever" (the human-only `purgeDeleted` command for one wine).
   3. Wishlist: add by hand (producer, wine, vintage, note, target price), mark bought converts through `DraftCard`.
   4. Stats: SVG bar charts for bottles by colour, country, vintage decade, and window status, and bottles drunk per month for the last 12 months. Each chart has a table fallback for screen readers.
 - **Test scenarios:**
   - With sample data for year 2026, Home lists each wine under the section its window status gives.
   - An empty cellar shows the empty state with "Add your first wine" and "Explore a sample cellar".
+  - Three wines without windows show "No drinking window yet (3)"; with no key only "Set windows" appears.
   - History shows the newest batch first and its Undo reverses it.
   - Undo on a blocked batch shows the blocking batch's summary.
   - Converting a wishlist item opens a draft with its fields and removes the item after save.
@@ -545,13 +547,14 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 - **Dependencies:** U8, U10 (for the start options), U7 (key step).
 - **Files:** `src/features/onboarding/`, `src/features/tour/Tour.tsx`, `src/features/tour/steps.ts`, `src/features/help/HelpPage.tsx`, `src/content/help.ts`, `src/features/whats-new/WhatsNewPage.tsx`, `src/content/changelog.ts`, `src/lib/platform.ts`, tests beside each.
 - **Approach:**
-  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, or manual menu instructions (the install icon in the address bar, or the menu's Install Vintry item) when the prompt event has not fired, then an optional AI key step (why, how to get a key in three steps, a cost example computed from `src/ai/models.ts`, a one-line note that AI features send the text, photo, or cellar details they use to Anthropic, Test key, Skip), then "How do you want to start?" with the five options.
+  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, or manual menu instructions (the install icon in the address bar, or the menu's Install Vintry item) when the prompt event has not fired, then an optional AI key step (why, how to get a key in three steps, a cost example computed from `src/ai/models.ts`, a one-line note that AI features send the text, photo, or cellar details they use to Anthropic, Test key, Skip), then "How do you want to start?" with six options: scan, describe, add by hand, import CSV, explore a sample cellar, and restore from a Vintry backup (U10's restore flow).
   2. Tour: four to six coach marks anchored to the sidebar and key buttons (Home sections, Add, Cellar filters, Sommelier, More → Backup). Skippable, re-runnable from Help. No third-party tour library.
   3. Help page: short task-based sections ("Add a bottle", "Drink a bottle", "Move bottles", "Ask the sommelier", "Import from CellarTracker", "Back up and move to a new device", "Install the app", "Get an AI key", "Privacy"). The Privacy section states what each AI feature sends to Anthropic. Content lives in `src/content/help.ts`.
   4. Sample cellar banner on Home: "You are exploring a sample cellar" with Clear sample data; adding the first real wine asks whether to clear the samples.
   5. What's New reads `changelog.ts`; after an update, a one-time "What's new in version X" toast links to it.
 - **Test scenarios:**
   - First launch routes to `/welcome`; after finishing, later launches open Home.
+  - Choosing "Restore from a Vintry backup" on first launch restores a backup and lands on Home with the restored wines.
   - The Safari-on-macOS platform check (mocked) shows the install step first; installed standalone mode skips it; Chrome shows the Install app button when the install prompt event fired.
   - Skipping the key step leaves AI in the no-key state and the Add hub shows manual options first.
   - Choosing "Explore a sample cellar" loads samples and shows the banner; Clear sample data removes them and the banner.
@@ -569,8 +572,8 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
 - **Approach:**
   1. E2E journeys run on desktop Chromium at the wide and narrow window sizes. The sommelier and scan journeys intercept `api.anthropic.com` with Playwright route mocks.
   2. Offline journey: load once, go offline, add and drink a bottle, reload, data persists.
-  3. `README.md`: what Vintry is, a screenshot, three ways to start (hosted link, double-click launcher, developer commands), and a feature list.
-  4. `docs/SETUP.md`: step-by-step for Cloudflare Pages and Netlify from a private GitHub repo, installing the app on Mac (Chrome, Edge, Safari Add to Dock) and Windows (Chrome, Edge), getting a Claude API key and setting a spend limit, moving data between devices, and privacy notes: the key and data stay in the browser; with a key, the text, photos, and cellar details each AI feature uses are sent to Anthropic's API; the microphone button uses the browser's speech service. It also covers the first-launch warnings in KTD17.
+  3. `README.md`: what Vintry is, a screenshot, how to start (the double-click launcher first, then the hosted link, then developer commands), how to update, and a feature list.
+  4. `docs/SETUP.md`: step-by-step for Cloudflare Pages and Netlify from a private GitHub repo, installing the app on Mac (Chrome, Edge, Safari Add to Dock) and Windows (Chrome, Edge), getting a Claude API key and setting a spend limit, moving data between devices, and privacy notes: the key and data stay in the browser; with a key, the text, photos, and cellar details each AI feature uses are sent to Anthropic's API; the microphone button uses the browser's speech service. It also covers the first-launch warnings in KTD17 and an "Updating Vintry" section: the hosted link updates itself; a launcher user downloads the latest version into the same folder and double-clicks the launcher again, and their data stays because the address (localhost:47821) does not change.
 - **Test scenarios:**
   - First run with the sample cellar reaches a wine detail within the Success Criteria time budget.
   - Offline add and drink persist after reload.
