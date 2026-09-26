@@ -28,7 +28,7 @@ Vintry is a personal wine cellar app for one collector. Adding wine takes a labe
 
 ### Problem Frame
 
-The collector has bottles spread across racks and a fridge, bought over years, each with a different best-drinking window. The incumbent tools either demand heavy data entry with a dated interface (CellarTracker) or lock AI features behind a subscription (InVintory premium at $149.99 per year, Cellared at $7.99 to $15.99 per month, Sommo at $5 per month). Two AI-first cellar apps already exist, so Vintry must win on three things: it is free to run (the user pays only their own AI usage, often cents per month), private (the cellar never leaves the device unless the user exports it), and fast to set up (open a link or double-click a launcher, no account). The main failure the collector fears is losing years of records, so data safety is a first-class feature, not polish.
+The collector has bottles spread across racks and a fridge, bought over years, each with a different best-drinking window. The incumbent tools either demand heavy data entry with a dated interface (CellarTracker) or lock AI features behind a subscription (InVintory premium at $149.99 per year, Cellared at $7.99 to $15.99 per month, Sommo at $5 per month). Two AI-first cellar apps already exist, so Vintry must win on three things: it is free to run (the user pays only their own AI usage, often cents per month), private (the cellar never leaves the device unless the user exports it or uses an AI feature, which sends that feature's text, photo, or cellar details to Anthropic's API), and fast to set up (open a link or double-click a launcher, no account). The main failure the collector fears is losing years of records, so data safety is a first-class feature, not polish.
 
 ### Key Decisions
 
@@ -127,22 +127,22 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 ### Key Technical Decisions
 
 - KTD1. **Local-first PWA, no backend.** Vite, React, and TypeScript build a static site. All data lives in IndexedDB through Dexie. This removes accounts, servers, and hosting cost, which serves R25 and R26. Rejected: a hosted database (setup and privacy cost) and a native app (store review and build tooling the user cannot run).
-- KTD2. **Bring your own Claude API key, called from the browser.** The official `@anthropic-ai/sdk` client runs with `dangerouslyAllowBrowser: true`, which sends the `anthropic-dangerous-direct-browser-access` header that Anthropic's API accepts for CORS. The key is stored only in the browser (IndexedDB settings table) and never leaves it except to `api.anthropic.com`. A strict Content-Security-Policy with no third-party scripts limits the XSS risk. The risk is accepted for a single-user tool and is written in the setup guide.
-- KTD3. **Default model `claude-opus-5`, user-selectable.** Settings offer "Best (Claude Opus 5)", "Balanced (Claude Sonnet 5)", and "Economy (Claude Haiku 4.5)". Opus 5 requests use adaptive thinking with `output_config.effort` set per feature (low for extraction and mapping, medium for chat) and the server-side refusal fallback (`fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta). Haiku 4.5 requests omit adaptive thinking and effort. Model IDs and prices live in one table in `src/ai/models.ts`. Implementers must load the `claude-api` skill and follow its TypeScript docs; the SDK surface is not to be guessed.
+- KTD2. **Bring your own Claude API key, called from the browser.** The official `@anthropic-ai/sdk` client runs with `dangerouslyAllowBrowser: true`, which sends the `anthropic-dangerous-direct-browser-access` header that Anthropic's API accepts for CORS. The key is stored only in the browser (IndexedDB settings table) and never leaves it except to `api.anthropic.com`. A strict Content-Security-Policy with no third-party scripts limits the XSS risk. The same headers come from one constant (`src/config/securityHeaders.ts`) and are served by the launcher's preview server, `_headers`, and `vercel.json`; a test keeps the copies identical. The risk is accepted for a single-user tool and is written in the setup guide.
+- KTD3. **Default model `claude-opus-5`, user-selectable.** Settings offer "Best (Claude Opus 5)", "Balanced (Claude Sonnet 5)", and "Economy (Claude Haiku 4.5)". Opus 5 requests use adaptive thinking with `output_config.effort` set per feature (low for extraction and mapping, medium for chat) and the server-side refusal fallback (`fallbacks: "default"` with the `server-side-fallback-2026-07-01` beta). Haiku 4.5 requests omit adaptive thinking and effort. Model IDs and prices live in one table in `src/ai/models.ts`. Usage is priced by the model the response reports as served (a refusal fallback can serve another model); an unknown model shows tokens with "price unknown". Cost examples in the UI read from this table, never fixed text. Implementers must load the `claude-api` skill and follow its TypeScript docs; the SDK surface is not to be guessed.
 - KTD4. **One domain command layer for every write.** All changes, from UI forms, quick-add, scan, import, restore, and chat, go through commands in `src/domain/commands/`. Each command validates input with a zod schema, runs in one Dexie transaction, writes an event batch with a source (`user`, `ai-chat`, `ai-scan`, `ai-describe`, `import`, `restore`, `sample`), and returns its inverse plus the preconditions for undo. The same zod schemas generate the sommelier's tool JSON schemas.
 - KTD5. **Lots, not single bottles.** A Lot is a quantity of one wine at one location. Partial moves split a lot (the new lot records `splitFromLotId`). A lot at zero is closed, not deleted. Bottle size lives on the Wine, so a magnum is a different wine for matching.
-- KTD6. **Duplicate matching key.** Normalized producer + cuvée + vintage (or NV) + bottle size. Normalization lowercases, strips accents and punctuation, and collapses spaces. Scan, describe, and import use the same matcher in `src/domain/match.ts`.
-- KTD7. **Undo by precondition.** An event batch stores the inverse operations and a snapshot of each touched record's `updatedAt`. Undo runs only if every touched record still has that `updatedAt`. Otherwise it names the later batch in the way (R6, AE4).
+- KTD6. **Duplicate matching key.** Normalized producer + cuvée + vintage (or NV) + bottle size. Normalization lowercases, strips accents and punctuation, and collapses spaces. Scan, describe, and import use the same matcher in `src/domain/match.ts`. The matcher ignores sample wines (`isSample`), so a real bottle never attaches to a sample wine.
+- KTD7. **Undo by event log.** An event batch stores the inverse operations and the IDs it touched. Undo runs only when no later batch that is not itself undone touched any of those IDs. Otherwise it names the later batch in the way (R6, AE4). Undo writes `updatedAt` = now and marks the batch `undoneAt`, so `updatedAt` always increases and a later merge restore can trust it.
 - KTD8. **Soft delete.** Deleting a wine sets `deletedAt` and hides it everywhere. Undo clears it. A "Recently deleted" list in History allows restore for 30 days. Purge after 30 days happens on app start.
 - KTD9. **One tasting-note entity.** A TastingNote has an optional `consumptionId`. Notes typed while drinking a bottle and notes added later are the same record type.
 - KTD10. **Structured extraction is not chat.** Label scan, describe, window estimates, note tidy-up, and CSV mapping each use one structured-output request (`output_config.format` with a JSON schema generated from zod) that fills a draft. Only the sommelier uses a tool loop.
-- KTD11. **The sommelier tool loop runs in the browser and pauses for proposals.** Read tools (`search_cellar`, `get_wine`, `list_locations`, `cellar_stats`, `get_consumption_history`, `show_bottles`) run at once. Proposal tools (`propose_add_bottles`, `propose_consume`, `propose_move`, `propose_update_wine`, `propose_adjust_quantity`, `propose_set_drinking_window`) render a confirm card and the loop waits. Write tools accept IDs from earlier reads plus an `expected_quantity` precondition. A mismatch or an ambiguous reference returns candidates and no change. The loop is capped at 8 tool rounds per user turn. API key, wipe, restore, export, and hard delete are human-only; a parity test enforces that each command is either exposed as a tool or marked human-only with a reason.
-- KTD12. **Sommelier context.** A static system prompt (role, vocabulary, confirmation rules, "recommend only bottles returned by tools", locale, currency) gets a cache breakpoint. A cellar snapshot follows: date, totals, locations, status counts, and the full compact lot table only when the cellar has 200 lots or fewer. The current screen (wine or filter in view) follows last. Chat threads persist in IndexedDB. Each new user turn re-reads state through tools rather than trusting old tool results.
+- KTD11. **The sommelier tool loop runs in the browser and pauses for proposals.** Read tools (`search_cellar`, `get_wine`, `list_locations`, `cellar_stats`, `get_consumption_history`, `show_bottles`) run at once. Proposal tools (`propose_add_bottles`, `propose_consume`, `propose_move`, `propose_update_wine`, `propose_adjust_quantity`, `propose_set_drinking_window`) render a confirm card and the loop waits. Write tools accept IDs from earlier reads plus an `expected_quantity` precondition. A mismatch or an ambiguous reference returns candidates and no change. Every `tool_use` block in a response gets a `tool_result` in the next user message: read tools run at once, all proposal cards in the response are shown, and the loop sends only after each card is confirmed or rejected. If the user sends a new message or reopens a thread while cards are pending, those cards expire and each gets the tool_result "Proposal expired, not applied" before the new text. The loop is capped at 8 tool rounds per user turn. API key, wipe, restore, export, and hard delete are human-only; a parity test enforces that each command is either exposed as a tool or marked human-only with a reason.
+- KTD12. **Sommelier context.** A static system prompt (role, vocabulary, confirmation rules, "recommend only bottles returned by tools", locale, currency) gets a cache breakpoint. Per-turn context is appended as a new message, never by editing the system prompt or earlier turns, so the history stays append-only and cache-friendly: a cellar snapshot (date, totals, locations, status counts, and the full compact lot table only when the cellar has 200 lots or fewer) with its own cache breakpoint, then the current screen (wine or filter in view). Chat threads persist in IndexedDB. Each new user turn re-reads state through tools rather than trusting old tool results.
 - KTD13. **CSV import is deterministic first.** Presets map CellarTracker and Vivino headers with no AI. Decoding tries UTF-8 strictly, then falls back to windows-1252. The parser detects comma or semicolon delimiters and decimal commas. CellarTracker's `9999` window sentinel and `1001` NV vintage map to empty and NV. For unknown CSVs the AI returns only a column mapping from the headers plus 20 sample rows. Code applies the mapping to every row. Parsing uses `papaparse`.
 - KTD14. **Images are downscaled before upload.** The label photo is decoded with `createImageBitmap` (respecting EXIF orientation), scaled so the long edge is at most 1568 px, and re-encoded as JPEG quality 0.85. A 256 px thumbnail is stored with the wine. HEIC files that the browser cannot decode show a message to use JPEG or the camera button.
-- KTD15. **Backup format.** JSON `{ app: "vintry", schemaVersion, exportedAt, data: { table: rows[] } }` with zod validation on import. Photos are included as data URLs. Backups from older schema versions pass through the same migration functions as the database. Restore takes a safety snapshot (a full backup stored in a `snapshots` table, last 3 kept) before replacing. On Chromium browsers the user can pick a backup file once and later backups overwrite it through the File System Access API; other browsers download a file.
+- KTD15. **Backup format.** JSON `{ app: "vintry", schemaVersion, exportedAt, data: { table: rows[] } }` with zod validation on import. Backed-up tables: wines, lots, consumptions, tastingNotes, locations, wishlist, eventBatches, chatThreads, chatMessages, and settings without the `apiKey` row. The `snapshots` and `aiUsage` tables are never exported and never replaced by a restore. Photos are included as data URLs. Backups from older schema versions pass through the same migration functions as the database. Restore takes a safety snapshot (a full backup stored in a `snapshots` table, last 3 kept) before replacing. On Chromium browsers the user can pick a backup folder once; each later backup writes a dated file there through the File System Access API and the newest 10 are kept. Other browsers download a dated file.
 - KTD16. **Updates.** `vite-plugin-pwa` with `registerType: "prompt"` shows a "New version available" toast with Reload. Dexie `version(n).upgrade()` functions carry data forward; a `versionchange` handler closes the database and shows "Vintry was updated in another tab, reload". The changelog lives in `src/content/changelog.ts` and feeds What's New.
-- KTD17. **Hosting and launcher.** The build output is a static folder. `_headers` and `_redirects` serve Cloudflare Pages and Netlify; `vercel.json` serves Vercel. GitHub Pages is not used because it needs a paid plan for a private repo. Two launchers (`Start Vintry.command` for macOS, `Start Vintry.bat` for Windows) check for Node 20 or newer, install dependencies on first run, build when the build is missing or older than the source, start the preview server on a fixed port (4173), and open the browser. If Node is missing, the launcher says so in plain words and opens nodejs.org.
+- KTD17. **Hosting and launcher.** The build output is a static folder. `_headers` and `_redirects` serve Cloudflare Pages and Netlify; `vercel.json` serves Vercel. GitHub Pages is not used because it needs a paid plan for a private repo. Two launchers (`Start Vintry.command` for macOS, `Start Vintry.bat` for Windows) check for the Node version in `package.json` engines (22.22 or newer, the highest minimum the dependencies declare), install dependencies on first run, build when the build is missing or older than the source, and start the preview server on fixed port 47821 with `strictPort`, away from common dev-server defaults, because the port is part of the data's origin. If Vintry already answers on that port, the launcher only opens the browser; if another program holds the port, it stops with a plain message. If Node is missing, the launcher says so in plain words and opens nodejs.org. The shared logic lives in `scripts/launch.mjs`. Downloaded launchers are unsigned, so the setup guide covers the one-time macOS Privacy & Security "Open Anyway" step and the Windows SmartScreen "More info → Run anyway" step.
 - KTD18. **UI stack.** Tailwind CSS v4 with design tokens as CSS variables, light and dark themes, lucide-react icons, and no component library. Desktop-first layout with a left sidebar (Home, Cellar, Add, Sommelier, More groups) that collapses to an icon rail below 1100 px and to a bottom bar below 720 px, so a narrow window still works. Keyboard shortcuts: `/` focuses search, `N` opens Add. Click targets are at least 40 px. TypeScript is pinned to `~5.9` because TypeScript 7 breaks typescript-eslint today. No Recharts (open blank-chart bug with React 19.2). Charts are hand-built SVG bar charts to keep the bundle small.
 - KTD19. **Testing.** Vitest with jsdom and fake-indexeddb for domain, database, AI (with a scripted fake model), and component tests. Playwright for end-to-end journeys on desktop Chromium at a wide and a narrow (1024 × 700) window. No test calls the real API. A small live eval script (`scripts/ai-eval.ts`) runs only when `ANTHROPIC_API_KEY` is set and is not part of CI.
 
@@ -243,8 +243,7 @@ flowchart TB
   U4 --> U5
   U3 --> U6
   U4 --> U6
-  U3 --> U8
-  U4 --> U8
+  U5 --> U8
   U7 --> U8
   U3 --> U10
   U4 --> U10
@@ -258,14 +257,14 @@ flowchart TB
   U11 --> U12
 ```
 
-Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in parallel. Wave C: U9 and U11 in parallel. Wave D: U12. U4 registers every route with a stub page up front, so feature units only write inside their own `src/features/<name>/` folder and do not edit shared routing.
+Wave A: U1, then U2 with U3 and U4 in parallel. Wave B: U5, U6, U7, U10 in parallel. Wave C: U8 and U9 in parallel. Wave D: U11. Wave E: U12. U4 registers every route; the orchestrator adds one stub file per route and per cross-unit component (for example `src/features/wine/EstimateWindowButton.tsx`) before each wave and assigns every file to exactly one unit, so parallel units never write the same file.
 
 ### Risks
 
 | Risk | Mitigation |
 |---|---|
 | Browser storage eviction (Safari evicts script-written storage for sites not used in 7 days unless added to the Dock) | Persistent storage request (R23), install-first in Safari (R28), backup reminders (R22), file-handle backups on Chromium (KTD15) |
-| API key exposure through XSS | Strict CSP in `_headers` and `vercel.json`, no third-party scripts, no `dangerouslySetInnerHTML`, key removable in Settings (KTD2) |
+| API key exposure through XSS | Strict CSP from one shared constant on every serving path (launcher, `_headers`, `vercel.json`), no third-party scripts, no `dangerouslySetInnerHTML`, key removable in Settings (KTD2) |
 | Prompt injection from label text, CSV cells, or notes | All AI writes pass a confirm card (R15), imported text is fenced as data in prompts, AI cannot reach human-only commands (KTD11) |
 | AI misreads prices or scores | AI never fills price, score, or value (R17). Draft fields are editable. Number fields are validated as numbers |
 | Schema mistakes after release | Migration fixture tests from each schema version and each backup version (U2) |
@@ -293,7 +292,7 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 | U5 | Cellar, wine detail, manual add and edit, drink, move, locations | `src/features/cellar/`, `wine/`, `add/`, `locations/` | U3, U4 |
 | U6 | Home, History, Wishlist, Stats | `src/features/home/`, `history/`, `wishlist/`, `stats/` | U3, U4 |
 | U7 | AI foundation and Settings | `src/ai/`, `src/features/settings/` | U1 |
-| U8 | AI add flows, windows, note helper | `src/ai/features/`, `src/features/add/` | U3, U4, U7 |
+| U8 | AI add flows, windows, note helper | `src/ai/features/`, `src/features/add/` | U5, U7 |
 | U9 | Sommelier chat | `src/ai/sommelier/`, `src/features/sommelier/` | U5, U7 |
 | U10 | Import, export, backup, restore | `src/lib/csv.ts`, `src/features/import/`, `src/features/backup/` | U3, U4 |
 | U11 | Onboarding, tour, Help, sample cellar, What's New | `src/features/onboarding/`, `tour/`, `help/`, `whats-new/` | U8, U10 |
@@ -313,7 +312,8 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 - **Test scenarios:**
   - `App.test.tsx`: rendering the app shows the "Vintry" heading.
   - `e2e/smoke.spec.ts`: the built preview serves `/` and shows "Vintry"; a deep link such as `/cellar` also loads (SPA fallback).
-  - Launcher: running `Start Vintry.command` with bash in a clean checkout installs, builds, and serves on port 4173 (smoke check in CI on Linux runs the same script with the browser-open step skipped through an env flag).
+  - Launcher: a CI job on macos-latest and windows-latest runs each launcher with `VINTRY_NO_OPEN=1` and checks that `/` is served on port 47821 with the Content-Security-Policy header; a second launch while the first runs exits cleanly without starting another server.
+  - `src/config/securityHeaders.test.ts`: `_headers` and `vercel.json` match the shared constant.
 - **Verification:** `npm run check`, `npm run build`, and `npm run test:e2e` pass locally.
 
 ### U2. Data model, database, migrations, backup format
@@ -331,7 +331,7 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 - **Patterns to follow:** Dexie `version().stores().upgrade()`; zod `safeParse` at every trust boundary (backup import, AI output, CSV rows).
 - **Test scenarios:**
   - Creating a wine and lot and reading them back returns equal objects with UUIDs and timestamps.
-  - A backup export followed by import into an empty database reproduces every table row for row.
+  - A backup export followed by import into an empty database reproduces every backed-up table row for row; the export has no `apiKey`, and restore leaves `snapshots` untouched.
   - Importing a backup with a missing required field fails with a readable message naming the table and field, and writes nothing.
   - Importing a backup with `app` not equal to "vintry" fails with "This is not a Vintry backup".
   - A backup from a future `schemaVersion` fails with "This backup was made by a newer Vintry. Update the app first."
@@ -361,7 +361,8 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
   - `consumeBottles` of more than the lot holds fails and changes nothing.
   - `moveBottles` of 2 from a lot of 6 creates a new lot of 2 at the target with `splitFromLotId` and leaves 4.
   - Undo of a move restores one lot of 6 and removes the split lot.
-  - Covers AE4. Undo of a move after a later consume on the same lot is refused and names the blocking batch.
+  - Covers AE4. Undo of a move after a later consume on the same lot is refused and names the blocking batch; undoing the consume and then the move both succeed.
+  - A real add matching a sample wine creates a new wine, not a lot under the sample.
   - `deleteWine` sets `deletedAt`, hides the wine from selectors, and undo restores it; purge removes soft-deleted wines older than 30 days.
   - `setDrinkingWindow` with source `ai` on an empty window applies; with a user-set window it requires the `overwrite` flag.
   - Window status: for year 2026, window 2028 to 2035 gives Hold, 2020 to 2027 gives Drink soon, 2020 to 2024 gives Past peak, 2022 to 2030 gives Ready, none gives No window.
@@ -464,13 +465,13 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 
 - **Goal:** Scan, describe, drinking-window estimates, and note tidy-up, each ending in an editable draft or marked estimate.
 - **Requirements:** R11, R12, R13, R16, R17, R18, KTD6, KTD10, KTD14.
-- **Dependencies:** U3, U4, U7 (and U5's `DraftCard`; if U5 is still in flight, build against its props contract and integrate at the end of the wave).
+- **Dependencies:** U5 (its `DraftCard` and wine detail), U7.
 - **Files:** `src/ai/features/scanLabel.ts`, `src/ai/features/describe.ts`, `src/ai/features/estimateWindow.ts`, `src/ai/features/tidyNote.ts`, `src/lib/image.ts`, `src/features/add/ScanPage.tsx`, `src/features/add/DescribePage.tsx`, `src/features/add/AddHub.tsx`, `src/features/wine/EstimateWindowButton.tsx`, `src/features/wine/BulkEstimate.tsx`, tests beside each.
 - **Approach:**
   1. Add hub: four large tiles (Scan label, Describe, Add by hand, Import CSV) with the AI tiles showing their no-key state.
   2. Scan: drop zone plus Choose photo, and a webcam capture button when `getUserMedia` is available; downscale per KTD14, one structured request returning wine fields plus a per-field confidence (high or low); low-confidence fields are highlighted in the draft. Price and scores are never requested.
   3. Describe: textarea with a microphone button when the Web Speech API exists; the structured request returns one or more bottle drafts, quantity notes ("case assumed 12"), and a `priceBasis` of total, per bottle, or unclear.
-  4. Window estimate: one wine or a batch of up to 20 wines per request; the bulk flow shows the wine count and an estimated cost before running, runs in batches, can be cancelled, and resumes by skipping wines that got a window. Results apply through `setDrinkingWindow` with source `ai` and a one-line reason.
+  4. Window estimate: one wine (the Estimate button on wine detail, which U5 renders from `EstimateWindowButton.tsx`) or a batch of up to 20 wines per request, opened from a Home card "N wines have no drinking window" in the banner slot; the bulk flow shows the wine count and an estimated cost before running, runs in batches, can be cancelled, and resumes by skipping wines that got a window. Results apply through `setDrinkingWindow` with source `ai` and a one-line reason.
   5. Note tidy-up: returns a tidy note that fills the editor for the user to edit and save.
   6. Prompts fence user-provided and image text as data and instruct the model never to invent price, score, or value.
 - **Test scenarios:**
@@ -495,7 +496,7 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
   1. Tools are generated from the command registry and selectors (KTD4, KTD11). Tool definitions are stable and sorted so prompt caching holds.
   2. The loop streams the reply, runs read tools at once, pauses on proposal tools, re-validates on confirm, applies through the command layer with source `ai-chat`, and returns the stored result as the `tool_result`. Round cap 8. Errors go through `errors.ts`.
   3. Context per KTD12, including the current screen when opened from a wine ("Ask sommelier about this wine").
-  4. Chat UI: message list, streaming text, compact "Searched cellar: 3 matches" tool chips, bottle cards that link to wine detail, suggested prompts on an empty thread ("What should I open tonight?", "What is past its peak?", "Pair with roast lamb"), New chat, and thread list.
+  4. Chat UI: message list, streaming text, compact "Searched cellar: 3 matches" tool chips, bottle cards that link to wine detail, suggested prompts on an empty thread ("What should I open tonight?", "What is past its peak?", "Pair with roast lamb"), a one-line note that the sommelier sends cellar details to Anthropic, New chat, and thread list.
   5. Pending proposal cards from a previous session show as expired.
 - **Execution note:** Build the loop against the scripted fake model first; the live eval comes last.
 - **Test scenarios:**
@@ -506,6 +507,8 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
   - A proposal whose `expected_quantity` no longer matches returns candidates and changes nothing.
   - Covers AE3. A scripted ambiguous reference ("the Monte Bello" with two vintages) gets a candidates result, and the scripted model asks a question.
   - The round cap stops the loop at 8 tool rounds with a plain message.
+  - Two proposal calls in one response produce one user message with two tool_results after both cards are resolved.
+  - A new user message while a card is pending sends a valid request with an "expired" tool_result first; so does a reopened thread with an expired card.
   - A cellar of 150 lots puts the lot table in context; 250 lots sends only the summary.
   - Parity: every registry command is a tool or is `humanOnly` with a reason; `wipeAll`, `restoreBackup`, and `setApiKey` are not tools.
   - A proposal card restored from a previous session shows as expired and cannot be confirmed.
@@ -520,7 +523,7 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 - **Approach:**
   1. Import steps: pick file, detect preset from headers (CellarTracker, Vivino, or generic), show mapping (editable; AI suggestion button for generic with a key), choose a default location and currency, preview the first 20 rows with issues flagged, then import in one command batch with source `import` that undo can reverse.
   2. Parsing per KTD13. Duplicate wines within the file and against the cellar merge into lots through the matcher.
-  3. Backup page: last backup time, Export backup (JSON), Export CSV, Restore from backup (typed confirmation "REPLACE"), safety snapshots list with Restore, and on Chromium "Choose a backup file" for one-tap later backups.
+  3. Backup page: last backup time, Export backup (JSON), Export CSV, Restore from backup (typed confirmation "REPLACE"), safety snapshots list with Restore, and on Chromium "Choose a backup folder" for one-tap dated backups (newest 10 kept, per KTD15).
   4. Reminder: counts changes since last backup and days since last backup; shows the Home banner per R22 with Back up now and Later (snoozes 3 days).
 - **Test scenarios:**
   - A CellarTracker fixture with Latin-1 accents ("Château", "Côte-Rôtie") imports with correct characters.
@@ -541,9 +544,9 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
 - **Dependencies:** U8, U10 (for the start options), U7 (key step).
 - **Files:** `src/features/onboarding/`, `src/features/tour/Tour.tsx`, `src/features/tour/steps.ts`, `src/features/help/HelpPage.tsx`, `src/content/help.ts`, `src/features/whats-new/WhatsNewPage.tsx`, `src/content/changelog.ts`, `src/lib/platform.ts`, tests beside each.
 - **Approach:**
-  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, then an optional AI key step (why, how to get a key in three steps, cost example "a label scan costs about 1p", Test key, Skip), then "How do you want to start?" with the five options.
+  1. Onboarding at `/welcome` on first launch: welcome screen with the three promises (free, private, fast), an install step first in Safari on macOS (with File → Add to Dock instructions and a "Continue in browser" link that keeps a warning banner); in Chrome and Edge, an Install app button that uses the browser's install prompt, then an optional AI key step (why, how to get a key in three steps, a cost example computed from `src/ai/models.ts`, a one-line note that AI features send the text, photo, or cellar details they use to Anthropic, Test key, Skip), then "How do you want to start?" with the five options.
   2. Tour: four to six coach marks anchored to the sidebar and key buttons (Home sections, Add, Cellar filters, Sommelier, More → Backup). Skippable, re-runnable from Help. No third-party tour library.
-  3. Help page: short task-based sections ("Add a bottle", "Drink a bottle", "Move bottles", "Ask the sommelier", "Import from CellarTracker", "Back up and move to a new device", "Install the app", "Get an AI key", "Privacy"). Content lives in `src/content/help.ts`.
+  3. Help page: short task-based sections ("Add a bottle", "Drink a bottle", "Move bottles", "Ask the sommelier", "Import from CellarTracker", "Back up and move to a new device", "Install the app", "Get an AI key", "Privacy"). The Privacy section states what each AI feature sends to Anthropic. Content lives in `src/content/help.ts`.
   4. Sample cellar banner on Home: "You are exploring a sample cellar" with Clear sample data; adding the first real wine asks whether to clear the samples.
   5. What's New reads `changelog.ts`; after an update, a one-time "What's new in version X" toast links to it.
 - **Test scenarios:**
@@ -566,7 +569,7 @@ Wave A: U1, then U2 with U3, U4, and U7 in parallel. Wave B: U5, U6, U8, U10 in 
   1. E2E journeys run on desktop Chromium at the wide and narrow window sizes. The sommelier and scan journeys intercept `api.anthropic.com` with Playwright route mocks.
   2. Offline journey: load once, go offline, add and drink a bottle, reload, data persists.
   3. `README.md`: what Vintry is, a screenshot, three ways to start (hosted link, double-click launcher, developer commands), and a feature list.
-  4. `docs/SETUP.md`: step-by-step for Cloudflare Pages and Netlify from a private GitHub repo, installing the app on Mac (Chrome, Edge, Safari Add to Dock) and Windows (Chrome, Edge), getting a Claude API key and setting a spend limit, moving data between devices, and privacy notes (key and data stay in the browser).
+  4. `docs/SETUP.md`: step-by-step for Cloudflare Pages and Netlify from a private GitHub repo, installing the app on Mac (Chrome, Edge, Safari Add to Dock) and Windows (Chrome, Edge), getting a Claude API key and setting a spend limit, moving data between devices, and privacy notes: the key and data stay in the browser; with a key, the text, photos, and cellar details each AI feature uses are sent to Anthropic's API; the microphone button uses the browser's speech service. It also covers the first-launch warnings in KTD17.
 - **Test scenarios:**
   - First run with the sample cellar reaches a wine detail within the Success Criteria time budget.
   - Offline add and drink persist after reload.
