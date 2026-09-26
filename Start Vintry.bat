@@ -15,9 +15,9 @@ if errorlevel 1 (
 )
 
 for /f %%v in ('node -p "parseInt(process.versions.node)"') do set NODE_MAJOR=%%v
-if %NODE_MAJOR% LSS 20 (
+if %NODE_MAJOR% LSS 22 (
   echo.
-  echo   Vintry needs Node.js version 20 or newer. Opening the Node.js download page.
+  echo   Vintry needs Node.js version 22 or newer. Opening the Node.js download page.
   start "" "https://nodejs.org/en/download"
   echo.
   pause

@@ -18,9 +18,9 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 NODE_MAJOR="$(node -p 'parseInt(process.versions.node)')"
-if [ "$NODE_MAJOR" -lt 20 ]; then
+if [ "$NODE_MAJOR" -lt 22 ]; then
   echo ""
-  echo "  Vintry needs Node.js version 20 or newer (this Mac has $(node -v))."
+  echo "  Vintry needs Node.js version 22 or newer (this Mac has $(node -v))."
   echo "  Opening the Node.js download page. Install the LTS version, then try again."
   open "https://nodejs.org/en/download"
   pause_and_exit

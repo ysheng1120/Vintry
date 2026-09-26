@@ -3,7 +3,7 @@
 // Used by "Start Vintry.command" (macOS) and "Start Vintry.bat" (Windows).
 // Set VINTRY_NO_OPEN=1 to skip opening the browser (used by the CI smoke check).
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,6 +78,19 @@ function openBrowser() {
 }
 
 console.log("\n  Starting Vintry...\n");
+
+// The minimum Node version comes from package.json "engines" (for example ">=22.22").
+const engines = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).engines?.node ?? "";
+const [minMajor = 0, minMinor = 0] = (engines.match(/\d+(\.\d+)?/)?.[0] ?? "0")
+  .split(".")
+  .map(Number);
+const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
+if (major < minMajor || (major === minMajor && minor < minMinor)) {
+  fail(
+    `Vintry needs Node.js ${minMajor}.${minMinor} or newer, and this computer has ${process.versions.node}. ` +
+      "Install the LTS version from https://nodejs.org/en/download and try again.",
+  );
+}
 
 if (await portInUse()) {
   if (await isVintryRunning()) {
