@@ -7,9 +7,6 @@ import { useLayoutMode } from "./app/layoutMode";
 import { Navigation } from "./app/Navigation";
 import { useKeyboardShortcuts } from "./app/useKeyboardShortcuts";
 
-/** Height of the bottom bar, shared with fixed overlays such as toasts. */
-const BOTTOM_BAR_OFFSET = "4.5rem";
-
 /** The main layout: navigation, banner slot, and the current page. */
 export default function App() {
   const mode = useLayoutMode();
@@ -19,13 +16,6 @@ export default function App() {
   const firstRender = useRef(true);
 
   useKeyboardShortcuts();
-
-  // Keep toasts above the bottom bar.
-  useEffect(() => {
-    const root = document.documentElement;
-    if (mode === "bottom") root.style.setProperty("--vt-bottom-offset", BOTTOM_BAR_OFFSET);
-    else root.style.removeProperty("--vt-bottom-offset");
-  }, [mode]);
 
   // After navigating, move focus to the new page unless the page already took it.
   useEffect(() => {

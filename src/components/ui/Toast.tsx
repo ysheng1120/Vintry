@@ -27,9 +27,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
+      {/* Top centre: side panels open on the right and dialogs keep their buttons at the bottom,
+          so toasts never cover a sheet's actions. */}
       <section
         aria-label="Notifications"
-        className="pointer-events-none fixed right-4 bottom-[calc(var(--vt-bottom-offset,0px)+1rem)] left-4 z-[60] flex justify-center sm:left-auto sm:justify-end"
+        className="pointer-events-none fixed inset-x-4 top-4 z-[60] flex justify-center"
       >
         <ol aria-live="polite" className="flex w-full max-w-sm flex-col gap-2">
           {toasts.map((t) => (

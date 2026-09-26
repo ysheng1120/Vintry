@@ -207,6 +207,7 @@ export function Navigation({ mode }: { mode: LayoutMode }) {
   const sidebar = mode === "sidebar";
   return (
     <aside
+      aria-label="Main navigation"
       className={clsx(
         "fixed inset-y-0 left-0 z-40 flex flex-col overflow-y-auto border-r border-border bg-surface",
         sidebar ? "w-64 px-4 pt-6 pb-5" : "w-20 items-center px-2 pt-5 pb-4",
