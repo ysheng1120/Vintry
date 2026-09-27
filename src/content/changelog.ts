@@ -15,6 +15,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    date: "2026-09-27",
+    headline: "Your year in wine, what is in each bin, and a way to merge duplicates.",
+    changes: [
+      "Stats has a Year in wine recap: bottles bought and drunk, money spent, and your top wines.",
+      "Stats shows what you spent on wine each year.",
+      "On Locations, open a location to see its bottles, bin by bin.",
+      "Merge two records of the same wine from the wine's page. Bottles, drinks, and notes move over, and you can undo it.",
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-09-27",
     headline: "Track what your wines are worth, and ask the sommelier in one tap.",

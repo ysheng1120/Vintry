@@ -72,9 +72,27 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Choose the new location and how many bottles to move. Add a bin if you like.",
         ],
       },
-      { kind: "text", text: "Set up your racks, fridges, and cellars under More → Locations." },
+      {
+        kind: "text",
+        text: "Set up your racks, fridges, and cellars under More → Locations. Open a location there to see its bottles, bin by bin.",
+      },
     ],
     links: [{ to: "/locations", label: "Locations" }],
+  },
+  {
+    id: "merge",
+    title: "Merge duplicate wines",
+    blocks: [
+      {
+        kind: "steps",
+        items: [
+          "Open the wine you want to keep and click Merge with another wine.",
+          "Pick the duplicate. Likely duplicates (same producer and vintage) come first.",
+          "Click Merge. Its bottles, drinks, and notes move to the wine you kept, and the duplicate is deleted.",
+        ],
+      },
+      { kind: "text", text: "Changed your mind? Undo it from the toast or from History." },
+    ],
   },
   {
     id: "undo",
