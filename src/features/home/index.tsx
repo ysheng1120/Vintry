@@ -15,6 +15,7 @@ import { formatMoney, type CurrencyTotal } from "../../domain/money";
 import { useHomeSections, type CellarRow, type HomeSections } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";
 import { greetingFor } from "./greeting";
+import { LastBottlesSection } from "./LastBottlesSection";
 import { WineCard } from "./WineCard";
 
 function Section({ title, rows }: { title: string; rows: CellarRow[] }) {
@@ -230,6 +231,7 @@ export default function HomePage() {
       <Section title="Ready now" rows={home.ready} />
       <Section title="Drink soon" rows={home.drinkSoon} />
       <Section title="Past peak" rows={home.pastPeak} />
+      <LastBottlesSection />
       <Section title="Coming into window" rows={home.comingIntoWindow} />
       <NoWindowSection count={home.counts.byStatus.none} />
       <Section title="Recently added" rows={home.recentlyAdded} />

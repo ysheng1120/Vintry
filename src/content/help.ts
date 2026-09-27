@@ -80,6 +80,25 @@ export const HELP_SECTIONS: HelpSection[] = [
     links: [{ to: "/locations", label: "Locations" }],
   },
   {
+    id: "wishlist",
+    title: "Keep a wishlist",
+    blocks: [
+      {
+        kind: "steps",
+        items: [
+          "Open More → Wishlist and click Add to wishlist. Add a target price if you like.",
+          "On a wine you love, click Buy again to put it on the wishlist in one step.",
+          "When you buy it, click Bought on the wishlist item to add the bottles to your cellar.",
+        ],
+      },
+      {
+        kind: "text",
+        text: "Home lists your last bottles of wines you gave four stars or more, so you know what to buy again.",
+      },
+    ],
+    links: [{ to: "/wishlist", label: "Wishlist" }],
+  },
+  {
     id: "merge",
     title: "Merge duplicate wines",
     blocks: [

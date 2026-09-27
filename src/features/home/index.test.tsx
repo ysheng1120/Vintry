@@ -197,6 +197,68 @@ describe("HomePage", () => {
     expect(screen.queryByText("Not sure what to open tonight?")).not.toBeInTheDocument();
   });
 
+  it("shows favourites down to their last bottle, best-rated first, and links to Buy again", async () => {
+    await addWine({
+      producer: "Ridge",
+      name: "Monte Bello",
+      vintage: 2019,
+      colour: "red",
+      rating: 92,
+      lots: [{ quantity: 1 }],
+    });
+    await addWine({
+      producer: "Latour",
+      vintage: 2010,
+      colour: "red",
+      rating: 98,
+      lots: [{ quantity: 1 }],
+    });
+    // Rated well but two bottles left: not a "last bottle".
+    await addWine({
+      producer: "Yquem",
+      vintage: 2015,
+      colour: "dessert",
+      rating: 95,
+      lots: [{ quantity: 2 }],
+    });
+    // Down to one bottle, but not rated well.
+    await addWine({
+      producer: "Estate X",
+      vintage: 2020,
+      colour: "red",
+      rating: 70,
+      lots: [{ quantity: 1 }],
+    });
+
+    renderHome();
+    const section = (await screen.findByRole("heading", { name: "Last bottles" })).closest(
+      "section",
+    )!;
+    const cards = within(section).getAllByRole("link");
+    expect(cards.map((c) => c.textContent)).toEqual([
+      expect.stringContaining("Latour 2010"),
+      expect.stringContaining("Ridge Monte Bello 2019"),
+    ]);
+    expect(cards[0]).toHaveAttribute("href", expect.stringMatching(/^\/wine\//));
+    expect(within(section).getAllByText("Buy again")).toHaveLength(2);
+    expect(within(section).queryByText(/Yquem/)).not.toBeInTheDocument();
+    expect(within(section).queryByText(/Estate X/)).not.toBeInTheDocument();
+  });
+
+  it("hides the Last bottles section when nothing qualifies", async () => {
+    await addWine({
+      producer: "Ridge",
+      vintage: 2019,
+      colour: "red",
+      windowFrom: 2022,
+      windowTo: 2030,
+      lots: [{ quantity: 3 }],
+    });
+    renderHome();
+    await screen.findByRole("heading", { name: "Ready now" });
+    expect(screen.queryByRole("heading", { name: "Last bottles" })).not.toBeInTheDocument();
+  });
+
   it("renders quickly with 500 wines (Verification Contract)", async () => {
     const wines = Array.from({ length: 500 }, (_, i) =>
       makeWine({

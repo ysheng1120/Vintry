@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeLocation, makeLot, makeWine, resetDatabase } from "../../db/testing";
 import { currentYear, setClock } from "../../domain/clock";
+import { addWishlistItem } from "../../domain/commands/wishlist";
 import { formatDate } from "../../lib/format";
 import { renderCellarApp } from "../cellar/testing";
 
@@ -228,6 +229,51 @@ describe("Wine detail", () => {
     await user.click(within(sheet).getByRole("button", { name: "Save note" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Still tight, decant")).toBeInTheDocument();
+  });
+
+  it("adds the wine to the wishlist with Buy again, then shows it's already there", async () => {
+    const { wine } = await seedWine(6);
+    const { user } = await openWine(wine.id);
+    await user.click(screen.getByRole("button", { name: "Buy again" }));
+
+    expect(
+      await within(notifications()).findByText("Added Ridge Monte Bello 2019 to the wishlist"),
+    ).toBeInTheDocument();
+    const item = (await db.wishlist.toArray())[0]!;
+    expect(item).toMatchObject({
+      producer: "Ridge",
+      name: "Monte Bello",
+      vintage: 2019,
+      colour: "red",
+      region: "Santa Cruz Mountains",
+      country: "USA",
+      notes: "Buy again",
+    });
+
+    const link = await screen.findByRole("link", { name: "On your wishlist" });
+    expect(link).toHaveAttribute("href", "/wishlist");
+    expect(screen.queryByRole("button", { name: "Buy again" })).not.toBeInTheDocument();
+  });
+
+  it("shows On your wishlist when a matching item is already on the wishlist", async () => {
+    const { wine } = await seedWine(6);
+    await addWishlistItem({ producer: "ridge", name: "monte bello", vintage: 2019 });
+    await openWine(wine.id);
+
+    const link = await screen.findByRole("link", { name: "On your wishlist" });
+    expect(link).toHaveAttribute("href", "/wishlist");
+    expect(screen.queryByRole("button", { name: "Buy again" })).not.toBeInTheDocument();
+    expect(await db.wishlist.count()).toBe(1);
+  });
+
+  it("hides the Buy again button for a sample wine", async () => {
+    const wine = makeWine({ isSample: true });
+    await db.wines.add(wine);
+    await db.lots.add(makeLot({ wineId: wine.id, quantity: 3 }));
+    await openWine(wine.id);
+
+    expect(screen.queryByRole("button", { name: "Buy again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "On your wishlist" })).not.toBeInTheDocument();
   });
 
   it("shows a not-found state for a missing or deleted wine", async () => {

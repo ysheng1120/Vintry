@@ -5,6 +5,7 @@ import {
   MessageCircle,
   NotebookPen,
   Pencil,
+  ShoppingCart,
   Trash2,
   Wine as WineIcon,
 } from "lucide-react";
@@ -21,11 +22,12 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Skeleton, SkeletonText } from "../../components/ui/Skeleton";
 import { WindowBar } from "../../components/ui/WindowBar";
 import { currentYear } from "../../domain/clock";
-import { deleteWine, type CommandResult } from "../../domain/commands";
+import { addWishlistItem, deleteWine, type CommandResult } from "../../domain/commands";
 import { bottleSizeLabel, bottles, wineLabel } from "../../domain/labels";
+import { normalizeName } from "../../domain/match";
 import { formatMoney, wineValue } from "../../domain/money";
-import { useWineDetail, type WineDetail } from "../../domain/selectors";
-import { COLOUR_LABELS, type Wine } from "../../domain/types";
+import { useWineDetail, useWishlist, type WineDetail } from "../../domain/selectors";
+import { COLOUR_LABELS, type Wine, type WishlistItem } from "../../domain/types";
 import { formatDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import { StatusBadge, WindowSourceBadge } from "../cellar/StatusBadge";
@@ -49,6 +51,7 @@ type OpenSheet =
 export default function WineDetailPage() {
   const { id } = useParams();
   const detail = useWineDetail(id);
+  const wishlist = useWishlist();
   const navigate = useNavigate();
   const { done, failed } = useCommandFeedback();
   const [sheet, setSheet] = useState<OpenSheet>(null);
@@ -110,6 +113,24 @@ export default function WineDetailPage() {
   };
 
   const hasBottles = detail.lots.length > 0;
+  const wishlistMatch = findWishlistMatch(wishlist, wine);
+
+  const buyAgain = async () => {
+    try {
+      const result = await addWishlistItem({
+        producer: wine.producer,
+        name: wine.name,
+        vintage: wine.vintage,
+        colour: wine.colour,
+        country: wine.country,
+        region: wine.region,
+        notes: "Buy again",
+      });
+      done(result);
+    } catch (error) {
+      failed(error, "Couldn't add this to your wishlist");
+    }
+  };
 
   return (
     <>
@@ -167,6 +188,21 @@ export default function WineDetailPage() {
           <MessageCircle aria-hidden="true" className="size-4" />
           Ask sommelier
         </Link>
+        {!wine.isSample &&
+          (wishlistMatch ? (
+            <Link to="/wishlist" className={buttonClasses({ variant: "ghost" })}>
+              <ShoppingCart aria-hidden="true" className="size-4" />
+              On your wishlist
+            </Link>
+          ) : (
+            <Button
+              variant="ghost"
+              icon={<ShoppingCart aria-hidden="true" className="size-4" />}
+              onClick={() => void buyAgain()}
+            >
+              Buy again
+            </Button>
+          ))}
         <Button
           variant="ghost"
           icon={<Merge aria-hidden="true" className="size-4" />}
@@ -257,6 +293,22 @@ export default function WineDetailPage() {
         onCancel={close}
       />
     </>
+  );
+}
+
+/** The wishlist's own item for this wine (producer + name + vintage), ignoring sample rows. */
+function findWishlistMatch(
+  items: WishlistItem[] | undefined,
+  wine: Pick<Wine, "producer" | "name" | "vintage">,
+): WishlistItem | undefined {
+  const key = [normalizeName(wine.producer), normalizeName(wine.name), wine.vintage ?? "nv"].join(
+    "|",
+  );
+  return items?.find(
+    (item) =>
+      !item.isSample &&
+      [normalizeName(item.producer), normalizeName(item.name), item.vintage ?? "nv"].join("|") ===
+        key,
   );
 }
 
