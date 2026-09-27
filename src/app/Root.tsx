@@ -3,6 +3,7 @@ import BackupReminder from "../features/backup/BackupReminder";
 import { FirstRunRedirect } from "../features/onboarding/FirstRunRedirect";
 import { SafariTabWarning } from "../features/onboarding/SafariTabWarning";
 import { SampleDataWatcher } from "../features/onboarding/SampleDataWatcher";
+import { PaletteHost } from "../features/palette/PaletteHost";
 import { TourHost } from "../features/tour/TourHost";
 import { WhatsNewNotice } from "../features/whats-new/WhatsNewNotice";
 import { BrandMark } from "./Brand";
@@ -19,6 +20,7 @@ export function Root() {
       <SafariTabWarning />
       <WhatsNewNotice />
       <TourHost />
+      <PaletteHost />
       <Outlet />
     </AppProviders>
   );

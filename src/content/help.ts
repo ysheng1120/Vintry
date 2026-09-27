@@ -245,6 +245,8 @@ export const HELP_SECTIONS: HelpSection[] = [
         items: [
           { keys: "/", action: "Search your cellar" },
           { keys: "N", action: "Add wine" },
+          { keys: "Ctrl K", action: "Search pages, actions and wines (⌘ K on a Mac)" },
+          { keys: "?", action: "Show all keyboard shortcuts" },
           { keys: "Esc", action: "Close a panel or dialog" },
         ],
       },

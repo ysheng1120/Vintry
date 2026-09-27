@@ -1,6 +1,8 @@
 import clsx from "clsx";
-import { Lock } from "lucide-react";
+import { Lock, Search } from "lucide-react";
 import { Link, useLocation } from "react-router";
+import { openPalette } from "../features/palette/paletteStore";
+import { modifierLabel, paletteKeyshortcuts } from "../features/palette/platform";
 import { BrandMark, BrandWordmark } from "./Brand";
 import type { LayoutMode } from "./layoutMode";
 import { NAV_ITEMS, type NavItem } from "./navItems";
@@ -185,6 +187,42 @@ function BottomList({ pathname }: { pathname: string }) {
   );
 }
 
+/** Opens the command palette; a labelled button in the sidebar, an icon in the rail. */
+function SearchButton({ compact }: { compact: boolean }) {
+  const keys = `${modifierLabel()} K`;
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={openPalette}
+        aria-label="Search"
+        aria-keyshortcuts={paletteKeyshortcuts()}
+        title={`Search (${keys})`}
+        className="mt-auto flex size-11 items-center justify-center rounded-xl text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+      >
+        <Search aria-hidden="true" className="size-5" />
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={openPalette}
+      aria-keyshortcuts={paletteKeyshortcuts()}
+      className="flex min-h-10 w-full items-center gap-2.5 rounded-xl border border-border px-3 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+    >
+      <Search aria-hidden="true" className="size-4" />
+      <span className="flex-1 text-left">Search</span>
+      <kbd
+        aria-hidden="true"
+        className="rounded-md border border-border px-1.5 font-sans text-[0.7rem] leading-5 font-medium text-ink-subtle"
+      >
+        {keys}
+      </kbd>
+    </button>
+  );
+}
+
 /**
  * Main navigation (KTD18): the same five items as a sidebar (≥1100 px), an icon rail
  * (≥720 px), or a bottom bar. Items carry data-tour anchors for the guided tour.
@@ -224,11 +262,16 @@ export function Navigation({ mode }: { mode: LayoutMode }) {
       <nav aria-label="Main" data-layout={mode} className="w-full">
         {sidebar ? <SidebarList pathname={pathname} /> : <RailList pathname={pathname} />}
       </nav>
-      {sidebar && (
-        <p className="mt-auto flex items-start gap-2 rounded-xl bg-surface-muted/70 px-3 py-2.5 text-xs leading-relaxed text-ink-muted">
-          <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          Your cellar is stored only on this computer.
-        </p>
+      {sidebar ? (
+        <div className="mt-auto flex flex-col gap-3 pt-6">
+          <SearchButton compact={false} />
+          <p className="flex items-start gap-2 rounded-xl bg-surface-muted/70 px-3 py-2.5 text-xs leading-relaxed text-ink-muted">
+            <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+            Your cellar is stored only on this computer.
+          </p>
+        </div>
+      ) : (
+        <SearchButton compact />
       )}
     </aside>
   );
