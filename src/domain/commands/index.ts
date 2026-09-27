@@ -3,6 +3,7 @@ export * from "./schemas";
 export * from "./wines";
 export * from "./consumption";
 export * from "./lots";
+export * from "./merge";
 export * from "./windows";
 export * from "./notes";
 export * from "./locations";

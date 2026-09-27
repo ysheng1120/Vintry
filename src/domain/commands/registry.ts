@@ -3,6 +3,7 @@ import { consumeBottlesCommand } from "./consumption";
 import { restoreBackupCommand, restoreSnapshotCommand, wipeAllCommand } from "./admin";
 import { createLocationCommand, deleteLocationCommand, renameLocationCommand } from "./locations";
 import { adjustQuantityCommand, moveBottlesCommand } from "./lots";
+import { mergeWinesCommand } from "./merge";
 import { addTastingNoteCommand, deleteTastingNoteCommand, updateTastingNoteCommand } from "./notes";
 import { clearSampleCellarCommand, loadSampleCellarCommand } from "./sample";
 import { setDrinkingWindowCommand } from "./windows";
@@ -32,6 +33,7 @@ export const commands = {
   deleteWine: deleteWineCommand,
   restoreWine: restoreWineCommand,
   purgeDeleted: purgeDeletedCommand,
+  mergeWines: mergeWinesCommand,
   consumeBottles: consumeBottlesCommand,
   moveBottles: moveBottlesCommand,
   adjustQuantity: adjustQuantityCommand,

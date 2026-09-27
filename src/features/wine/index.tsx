@@ -1,6 +1,7 @@
 import {
   ArrowRightLeft,
   GlassWater,
+  Merge,
   MessageCircle,
   NotebookPen,
   Pencil,
@@ -32,6 +33,7 @@ import { DrinkSheet } from "./DrinkSheet";
 import { EditWineSheet } from "./EditWineSheet";
 import EstimateWindowButton from "./EstimateWindowButton";
 import { LotsCard } from "./LotsCard";
+import { MergeSheet } from "./MergeSheet";
 import { MoveSheet } from "./MoveSheet";
 import { NoteSheet } from "./NoteSheet";
 import { WindowSheet } from "./WindowSheet";
@@ -39,7 +41,7 @@ import { TastingHistory, WineActivity } from "./WineHistory";
 
 type OpenSheet =
   | { kind: "drink" | "move"; lotId?: string }
-  | { kind: "edit" | "window" | "note" | "delete" }
+  | { kind: "edit" | "window" | "note" | "merge" | "delete" }
   | null;
 
 /** One wine: identity, drinking window, bottles by location, actions, and history (R1–R4). */
@@ -157,6 +159,13 @@ export default function WineDetailPage() {
         >
           Add note
         </Button>
+        <Button
+          variant="secondary"
+          icon={<Merge aria-hidden="true" className="size-4" />}
+          onClick={() => setSheet({ kind: "merge" })}
+        >
+          Merge with another wine
+        </Button>
         <Link
           to={`/sommelier?wine=${encodeURIComponent(wine.id)}`}
           className={buttonClasses({ variant: "secondary" })}
@@ -234,6 +243,7 @@ export default function WineDetailPage() {
       {sheet?.kind === "edit" && <EditWineSheet wine={wine} onClose={close} onDone={finish} />}
       {sheet?.kind === "window" && <WindowSheet wine={wine} onClose={close} onDone={finish} />}
       {sheet?.kind === "note" && <NoteSheet wine={wine} onClose={close} onDone={finish} />}
+      {sheet?.kind === "merge" && <MergeSheet wine={wine} onClose={close} />}
       <ConfirmDialog
         open={sheet?.kind === "delete"}
         title="Delete this wine?"

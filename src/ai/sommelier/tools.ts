@@ -36,6 +36,7 @@ export const CHAT_HUMAN_ONLY: Partial<Record<CommandName, string>> = {
   updateWishlistItem: "The wishlist is kept by the collector.",
   removeWishlistItem: "The wishlist is kept by the collector.",
   convertWishlistItem: "Turning a wishlist item into bottles is done from the wishlist.",
+  mergeWines: "Merging wines is done by the collector from the wine's page.",
   loadSampleCellar: "The sample cellar is loaded by the collector from onboarding or Settings.",
   clearSampleCellar: "The sample cellar is cleared by the collector.",
 };
