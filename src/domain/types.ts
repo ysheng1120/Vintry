@@ -67,6 +67,17 @@ const base = {
 
 const text = () => z.string().nullable().default(null);
 
+/** An AI-written "About this wine" profile, from the wine's identity alone (never this bottle). */
+export const WineProfileSchema = z.object({
+  summary: z.string(),
+  tasting: z.string(),
+  pairings: z.array(z.string()).default([]),
+  serving: z.string(),
+  generatedAt: z.string(),
+  model: z.string(),
+});
+export type WineProfile = z.infer<typeof WineProfileSchema>;
+
 export const WineSchema = z.object({
   ...base,
   producer: z.string().min(1),
@@ -100,6 +111,8 @@ export const WineSchema = z.object({
   valueUpdatedAt: text(),
   deletedAt: text(),
   isSample: z.boolean().default(false),
+  /** The "About this wine" AI profile, written from this wine's identity. Missing on older rows. */
+  profile: WineProfileSchema.nullable().optional(),
 });
 export type Wine = z.infer<typeof WineSchema>;
 

@@ -5,6 +5,7 @@ export * from "./consumption";
 export * from "./lots";
 export * from "./merge";
 export * from "./windows";
+export * from "./wineProfile";
 export * from "./notes";
 export * from "./locations";
 export * from "./wishlist";

@@ -6,6 +6,7 @@ import { adjustQuantityCommand, moveBottlesCommand } from "./lots";
 import { mergeWinesCommand } from "./merge";
 import { addTastingNoteCommand, deleteTastingNoteCommand, updateTastingNoteCommand } from "./notes";
 import { clearSampleCellarCommand, loadSampleCellarCommand } from "./sample";
+import { setWineProfileCommand } from "./wineProfile";
 import { setDrinkingWindowCommand } from "./windows";
 import {
   addBottlesCommand,
@@ -38,6 +39,7 @@ export const commands = {
   moveBottles: moveBottlesCommand,
   adjustQuantity: adjustQuantityCommand,
   setDrinkingWindow: setDrinkingWindowCommand,
+  setWineProfile: setWineProfileCommand,
   addTastingNote: addTastingNoteCommand,
   updateTastingNote: updateTastingNoteCommand,
   deleteTastingNote: deleteTastingNoteCommand,

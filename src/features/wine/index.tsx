@@ -29,6 +29,7 @@ import { COLOUR_LABELS, type Wine } from "../../domain/types";
 import { formatDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import { StatusBadge, WindowSourceBadge } from "../cellar/StatusBadge";
+import AboutWineCard from "./AboutWineCard";
 import { DrinkSheet } from "./DrinkSheet";
 import { EditWineSheet } from "./EditWineSheet";
 import EstimateWindowButton from "./EstimateWindowButton";
@@ -212,6 +213,7 @@ export default function WineDetailPage() {
               <EstimateWindowButton wine={wine} />
             </div>
           </Card>
+          <AboutWineCard wine={wine} />
           {wine.notes && (
             <Card padding="lg">
               <h2 className="mb-2 text-lg font-semibold">Notes</h2>

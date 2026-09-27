@@ -76,6 +76,13 @@ function outputText(message: BetaMessage): string {
 export async function runStructured<Schema extends z.ZodType>(
   request: StructuredRequest<Schema>,
 ): Promise<z.infer<Schema>> {
+  return (await runStructuredWithModel(request)).data;
+}
+
+/** `runStructured`, plus the id of the model that actually answered (after any fallback). */
+export async function runStructuredWithModel<Schema extends z.ZodType>(
+  request: StructuredRequest<Schema>,
+): Promise<{ data: z.infer<Schema>; model: string }> {
   const message = await sendMessage(
     {
       feature: request.feature,
@@ -100,5 +107,5 @@ export async function runStructured<Schema extends z.ZodType>(
   }
   const parsed = request.schema.safeParse(json);
   if (!parsed.success) throw new AiError("invalid-output", { cause: parsed.error });
-  return parsed.data;
+  return { data: parsed.data, model: message.model };
 }

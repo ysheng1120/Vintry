@@ -202,7 +202,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     blocks: [
       {
         kind: "text",
-        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, tidy tasting notes, map unusual CSV files, and ask the sommelier.",
+        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, write an About this wine profile, tidy tasting notes, map unusual CSV files, and ask the sommelier.",
       },
       {
         kind: "text",
@@ -232,7 +232,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "list",
         items: [
           "Your cellar and your AI key stay in your browser on your computer. Vintry has no server and no account.",
-          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the CSV headers and sample rows you ask it to map, or the cellar details the sommelier looks up.",
+          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine, the CSV headers and sample rows you ask it to map, or the cellar details the sommelier looks up.",
           "The microphone button uses your browser's own speech service (in Chrome, that sends your voice to Google).",
           "Anyone who can use your computer's browser can open Vintry. Remove your key in Settings if you share the computer.",
         ],

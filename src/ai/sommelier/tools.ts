@@ -39,6 +39,7 @@ export const CHAT_HUMAN_ONLY: Partial<Record<CommandName, string>> = {
   mergeWines: "Merging wines is done by the collector from the wine's page.",
   loadSampleCellar: "The sample cellar is loaded by the collector from onboarding or Settings.",
   clearSampleCellar: "The sample cellar is cleared by the collector.",
+  setWineProfile: "The wine profile is written by the About this wine button.",
 };
 
 /** Commands the sommelier can propose, by tool name. */
