@@ -1,6 +1,7 @@
 #!/bin/bash
 # Double-click this file on a Mac to start Vintry.
-# The first time, macOS may ask for permission: right-click the file, choose Open, then Open.
+# The first time, macOS blocks it (the file is not signed by Apple): click Done, then open
+# System Settings > Privacy & Security, click Open Anyway, and confirm. See docs/SETUP.md.
 cd "$(dirname "$0")" || exit 1
 
 pause_and_exit() {
