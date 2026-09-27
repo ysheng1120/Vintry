@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { generateWineProfile } from "../../ai/features/wineProfile";
-import { useAiStatus, type AiStatus } from "../../ai/useAiStatus";
+import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { setWineProfile } from "../../domain/commands";
@@ -11,15 +11,6 @@ import { useCommandFeedback } from "../../app/commandFeedback";
 
 export interface AboutWineCardProps {
   wine: Wine;
-}
-
-/** A short note on why "Write a profile" cannot run right now; null when it's ready (R18). */
-function aiNote(status: AiStatus): string | null {
-  if (status.state === "no-key") return "Needs AI key";
-  if (status.state === "unavailable") {
-    return navigator.onLine ? "AI unavailable right now" : "You are offline";
-  }
-  return null;
 }
 
 /**
@@ -63,7 +54,7 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
   };
 
   const profile = wine.profile;
-  const note = aiNote(status);
+  const note = aiStatusNote(status);
   const busy = writing || removing;
   const disabled = status.state !== "ready" || busy;
 

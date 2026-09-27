@@ -81,7 +81,6 @@ const MessageMetaSchema = z.object({
   tone: z.enum(["info", "error"]).optional(),
 });
 export type MessageMeta = z.infer<typeof MessageMetaSchema>;
-export type MessageKind = MessageMeta["kind"];
 
 export interface StoredMessage extends ChatMessage {
   meta: MessageMeta;

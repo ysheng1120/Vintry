@@ -8,6 +8,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { commandErrorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
 import { COLOUR_LABELS, COLOURS, type WishlistItem } from "../../domain/types";
+import { parseAmount } from "../add/draft";
 import { useCurrency } from "../settings/currency";
 
 export interface WishlistFormProps {
@@ -47,6 +48,8 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
   const defaultCurrency = useCurrency();
   const [form, setForm] = useState<FormState>(() => stateFor(item));
   const [error, setError] = useState<string | null>(null);
+  const [vintageError, setVintageError] = useState<string | undefined>();
+  const [priceError, setPriceError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   // Reset the draft whenever a different item (or a fresh add) opens.
@@ -65,17 +68,29 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setVintageError(undefined);
+    setPriceError(undefined);
+    const vintage = form.vintage.trim() === "" ? null : Number(form.vintage.trim());
+    const targetPrice = parseAmount(form.targetPrice) ?? null;
+    if (vintage !== null && !Number.isInteger(vintage)) {
+      setVintageError("Enter a year, like 2019, or leave it blank.");
+      return;
+    }
+    if (targetPrice !== null && Number.isNaN(targetPrice)) {
+      setPriceError("Enter a number, like 45 or 45.50.");
+      return;
+    }
     setBusy(true);
     try {
       const fields = {
         producer: form.producer,
         name: form.name,
-        vintage: form.vintage.trim() === "" ? null : Number(form.vintage),
+        vintage,
         colour: form.colour === "" ? null : (form.colour as (typeof COLOURS)[number]),
         country: form.country,
         region: form.region,
         notes: form.notes,
-        targetPrice: form.targetPrice.trim() === "" ? null : Number(form.targetPrice),
+        targetPrice,
         currency: item?.currency ?? defaultCurrency,
       };
       const result = item
@@ -114,7 +129,7 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
           <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Vintage" hint="Leave blank for NV">
+          <Field label="Vintage" hint="Leave blank for NV" error={vintageError}>
             <Input
               type="number"
               inputMode="numeric"
@@ -141,7 +156,11 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
             <Input value={form.region} onChange={(e) => set("region", e.target.value)} />
           </Field>
         </div>
-        <Field label="Target price per bottle" hint={`In ${item?.currency ?? defaultCurrency}`}>
+        <Field
+          label="Target price per bottle"
+          hint={`In ${item?.currency ?? defaultCurrency}`}
+          error={priceError}
+        >
           <Input
             type="number"
             inputMode="decimal"

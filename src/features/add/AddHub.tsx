@@ -1,7 +1,7 @@
 import { Camera, ChevronRight, FileSpreadsheet, MessageSquareText, PenLine } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { Link } from "react-router";
-import { useAiStatus, type AiStatus } from "../../ai/useAiStatus";
+import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { PageHeader } from "../../components/ui/PageHeader";
 
 interface AddOption {
@@ -42,19 +42,10 @@ const OPTIONS: AddOption[] = [
   },
 ];
 
-/** A short note on an AI tile when AI cannot run; null when it is ready. */
-function aiNote(status: AiStatus): string | null {
-  if (status.state === "no-key") return "Needs AI key";
-  if (status.state === "unavailable") {
-    return navigator.onLine ? "AI unavailable right now" : "You are offline";
-  }
-  return null;
-}
-
 /** The four ways to add wine. AI tiles still open their page, which offers the manual path. */
 export default function AddHubPage() {
   const status = useAiStatus();
-  const note = aiNote(status);
+  const note = aiStatusNote(status);
   // Without a key, the ways that work today come first.
   const options =
     status.state === "no-key"

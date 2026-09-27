@@ -16,7 +16,7 @@ function subscribeOnline(onChange: () => void): () => void {
 }
 
 /** Live `navigator.onLine`. */
-export function useOnline(): boolean {
+function useOnline(): boolean {
   return useSyncExternalStore(
     subscribeOnline,
     () => navigator.onLine,
@@ -38,4 +38,15 @@ export function useAiStatus(): AiStatus {
   if (!online) return { state: "unavailable", reason: AI_ERROR_MESSAGES.offline };
   if (lastError) return { state: "unavailable", reason: lastError.message };
   return { state: "ready" };
+}
+
+/** A short note for an AI button or tile when AI cannot run right now; null when it is ready. */
+export function aiStatusNote(status: AiStatus): string | null {
+  if (status.state === "no-key") return "Needs AI key";
+  if (status.state === "unavailable") {
+    return status.reason === AI_ERROR_MESSAGES.offline
+      ? "You are offline"
+      : "AI unavailable right now";
+  }
+  return null;
 }

@@ -54,6 +54,19 @@ describe("WishlistPage", () => {
     expect(item.currency).toMatch(/^[A-Z]{3}$/);
   });
 
+  it("explains a vintage it cannot use, under that field, and saves nothing", async () => {
+    renderWishlist();
+    await userEvent.click(await screen.findByRole("button", { name: "Add to wishlist" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Producer" }), "Salon");
+    await userEvent.type(screen.getByRole("spinbutton", { name: "Vintage" }), "2019.5");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("Enter a year, like 2019, or leave it blank."),
+    ).toBeInTheDocument();
+    expect(await db.wishlist.count()).toBe(0);
+  });
+
   it("edits an existing item", async () => {
     await addWishlistItem({ producer: "Salon", vintage: 2012, colour: "sparkling" });
     renderWishlist();
