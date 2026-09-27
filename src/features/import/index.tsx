@@ -11,6 +11,7 @@ import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { createLocation, importRows } from "../../domain/commands";
+import { normalizeName } from "../../domain/match";
 import { useLocations } from "../../domain/selectors";
 import { parseCsvFile } from "../../lib/csv";
 import { errorMessage, useCommandFeedback } from "../cellar/feedback";
@@ -139,8 +140,17 @@ export default function ImportPage() {
     try {
       let locationId = locationMode === "existing" ? existingLocationId || null : null;
       if (locationMode === "new" && newLocationName.trim()) {
-        const created = await createLocation({ name: newLocationName.trim() });
-        locationId = created.touched.locationIds[0] ?? null;
+        const name = newLocationName.trim();
+        // Reuse a location whose name already matches (case- and accent-insensitively), the way
+        // resolveLotLocation does for the Add flow: a retry after a failed import, or simply
+        // typing a name that already exists, must not hit the "already exists" refusal.
+        const existing = locations?.find((l) => normalizeName(l.name) === normalizeName(name));
+        if (existing) {
+          locationId = existing.id;
+        } else {
+          const created = await createLocation({ name });
+          locationId = created.touched.locationIds[0] ?? null;
+        }
       }
       const finalPreview = buildImportRows(parsed.rows, {
         source,

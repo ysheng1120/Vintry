@@ -88,6 +88,14 @@ export default function StatsPage() {
             emptyMessage="No bottles yet."
           />
         </ChartCard>
+        <ChartCard title="Bottles by region">
+          <BarChart
+            title="Bottles by region"
+            data={stats.byRegion}
+            formatValue={bottleValue}
+            emptyMessage="No bottles yet."
+          />
+        </ChartCard>
         <ChartCard title="Bottles by vintage decade">
           <BarChart
             title="Bottles by vintage decade"

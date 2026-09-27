@@ -6,10 +6,9 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/useToast";
-import { commandErrorMessage } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
 import { removeWishlistItem } from "../../domain/commands/wishlist";
 import { wineLabel } from "../../domain/labels";
-import { undoBatch } from "../../domain/undo";
 import { useWishlist } from "../../domain/selectors";
 import type { WishlistItem } from "../../domain/types";
 import { WishlistCard } from "./WishlistCard";
@@ -18,6 +17,7 @@ import { WishlistForm } from "./WishlistForm";
 export default function WishlistPage() {
   const items = useWishlist();
   const { toast } = useToast();
+  const { done } = useCommandFeedback();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<WishlistItem | null>(null);
   const [removing, setRemoving] = useState<WishlistItem | null>(null);
@@ -38,13 +38,7 @@ export default function WishlistPage() {
     setBusy(true);
     try {
       const result = await removeWishlistItem({ itemId: removing.id });
-      toast({
-        title: result.summary,
-        tone: "success",
-        action: result.batchId
-          ? { label: "Undo", onClick: () => void undoBatch(result.batchId!) }
-          : undefined,
-      });
+      done(result);
       setRemoving(null);
     } catch (err) {
       toast({

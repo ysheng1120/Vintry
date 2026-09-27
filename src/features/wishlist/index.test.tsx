@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ToastProvider } from "../../components/ui/Toast";
 import { db } from "../../db/db";
 import { resetDatabase } from "../../db/testing";
-import { addWishlistItem } from "../../domain/commands/wishlist";
+import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
+import { undoBatch } from "../../domain/undo";
 import WishlistPage from "./index";
 
 function renderWishlist() {
@@ -79,6 +80,43 @@ describe("WishlistPage", () => {
 
     await waitFor(() => expect(screen.queryByText("Salon 2012")).not.toBeInTheDocument());
     expect(await db.wishlist.count()).toBe(0);
+  });
+
+  it("shows the refusal reason when undoing a remove that's already been undone", async () => {
+    await addWishlistItem({ producer: "Salon", vintage: 2012 });
+    renderWishlist();
+
+    const card = (await screen.findByText("Salon 2012")).closest("li")!;
+    await userEvent.click(within(card).getByRole("button", { name: "Remove" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(screen.queryByText("Salon 2012")).not.toBeInTheDocument());
+
+    const batch = (await db.eventBatches.orderBy("createdAt").last())!;
+    await undoBatch(batch.id); // undone from outside the toast, so the toast's own Undo now fails
+
+    await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Couldn't undo")).toBeInTheDocument();
+    expect(await screen.findByText(/already been undone/)).toBeInTheDocument();
+  });
+
+  it("shows the refusal reason when undoing an edit blocked by a later change", async () => {
+    const added = await addWishlistItem({ producer: "Salon", vintage: 2012 });
+    renderWishlist();
+
+    const card = (await screen.findByText("Salon 2012")).closest("li")!;
+    await userEvent.click(within(card).getByRole("button", { name: "Edit" }));
+    await userEvent.type(await screen.findByRole("textbox", { name: "Note" }), "Birthday gift");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/Edited/);
+
+    // A later change to the same item blocks undoing the edit above.
+    const itemId = added.touched.wishlistIds[0]!;
+    await updateWishlistItem({ itemId, patch: { notes: "Changed again" } });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Couldn't undo")).toBeInTheDocument();
+    expect(await screen.findByText(/A later change touched/)).toBeInTheDocument();
   });
 
   it("marks an item as bought by opening the manual add form with its id", async () => {

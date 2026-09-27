@@ -109,6 +109,27 @@ describe("ImportPage", () => {
     expect(await screen.findByRole("link", { name: "Go to cellar" })).toBeInTheDocument();
   });
 
+  it("reuses an existing location whose name matches a typed new-location name", async () => {
+    await db.locations.add(makeLocation({ id: "kitchen", name: "Kitchen rack" }));
+    renderPage();
+
+    await chooseFile("Producer,Wine,Vintage,Color\nRidge,Monte Bello,2019,Red\n", "one.csv");
+    await screen.findByText(/Generic CSV/);
+    await userEvent.selectOptions(screen.getByLabelText(/^Producer/), "Producer");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByText("Default currency");
+    await userEvent.selectOptions(screen.getByLabelText("Default location"), "Add a new location…");
+    await userEvent.type(screen.getByLabelText("New location name"), "kitchen RACK");
+    await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+    await userEvent.click(screen.getByRole("button", { name: /Import 1 wine/ }));
+
+    await waitFor(async () => expect(await db.wines.count()).toBe(1));
+    expect(await db.locations.count()).toBe(1);
+    const lots = await db.lots.toArray();
+    expect(lots[0]?.locationId).toBe("kitchen");
+  });
+
   it("skips a row missing a producer and shows the count in the preview", async () => {
     renderPage();
     const csv =

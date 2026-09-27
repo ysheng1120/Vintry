@@ -10,8 +10,7 @@ import { SkeletonText } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/useToast";
 import { now } from "../../domain/clock";
 import { loadSampleCellar } from "../../domain/commands/sample";
-import { undoBatch } from "../../domain/undo";
-import { commandErrorMessage } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
 import { formatMoney } from "../../domain/money";
 import { useHomeSections, type CellarRow, type HomeSections } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";
@@ -88,17 +87,12 @@ function CostSection({ home }: { home: HomeSections }) {
 
 function EmptyCellar() {
   const { toast } = useToast();
+  const { done } = useCommandFeedback();
 
   async function onSample() {
     try {
       const result = await loadSampleCellar();
-      toast({
-        title: result.summary,
-        tone: "success",
-        action: result.batchId
-          ? { label: "Undo", onClick: () => void undoBatch(result.batchId!) }
-          : undefined,
-      });
+      done(result);
     } catch (err) {
       toast({
         title: commandErrorMessage(err, "Could not load the sample cellar."),

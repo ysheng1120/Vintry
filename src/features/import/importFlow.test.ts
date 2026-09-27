@@ -115,6 +115,40 @@ describe("import fixtures", () => {
     expect(headers).toContain("Cuvee");
   });
 
+  it("imports the rest of the file when one row has a bad vintage, window year, or size", async () => {
+    const rows = [
+      { Producer: "Good Producer", Wine: "Good Wine", Vintage: "2019", Quantity: "1" },
+      { Producer: "Bad Vintage Co", Wine: "Odd Vintage", Vintage: "97", Quantity: "1" },
+      { Producer: "Another Good One", Wine: "Fine Wine", Vintage: "2015", Quantity: "1" },
+    ];
+    const mapping = {
+      producer: "Producer",
+      name: "Wine",
+      vintage: "Vintage",
+      quantity: "Quantity",
+    } as const;
+
+    const preview = buildImportRows(rows, {
+      source: "generic",
+      mapping,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(preview.includedCount).toBe(3);
+    expect(preview.skippedCount).toBe(0);
+    const badRow = preview.rows.find((r) => r.draft?.producer === "Bad Vintage Co");
+    expect(badRow?.draft?.vintage).toBeNull();
+    expect(badRow?.issues).toContainEqual(
+      expect.objectContaining({ kind: "warning", field: "vintage" }),
+    );
+
+    const result = await importRows({ rows: preview.drafts });
+    expect(result.touched.wineIds).toHaveLength(3);
+    const wines = await db.wines.toArray();
+    expect(wines).toHaveLength(3);
+    expect(wines.find((w) => w.producer === "Bad Vintage Co")?.vintage).toBeNull();
+  });
+
   it("detects the generic fixture as generic, needing a manual mapping", () => {
     const { headers } = parseCsvFile(readFixture("generic.csv"));
     expect(detectImportSource(headers)).toBe("generic");

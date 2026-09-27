@@ -181,6 +181,49 @@ describe("buildImportRows", () => {
     expect(preview.drafts[0]?.lots?.[0]?.locationId).toBe("default-loc");
   });
 
+  it("clears an out-of-range vintage with a warning instead of failing the row", () => {
+    const preview = buildImportRows([row({ Vintage: "97" })], {
+      source: "cellartracker",
+      mapping: BASE_MAPPING,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(preview.includedCount).toBe(1);
+    expect(preview.drafts[0]?.vintage).toBeNull();
+    expect(preview.rows[0]?.issues).toContainEqual(
+      expect.objectContaining({ kind: "warning", field: "vintage" }),
+    );
+  });
+
+  it("clears an out-of-range drinking window year with a warning instead of failing the row", () => {
+    const preview = buildImportRows([row({ BeginConsume: "0", EndConsume: "2034" })], {
+      source: "cellartracker",
+      mapping: BASE_MAPPING,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(preview.includedCount).toBe(1);
+    expect(preview.drafts[0]?.windowFrom).toBeNull();
+    expect(preview.drafts[0]?.windowTo).toBe(2034);
+    expect(preview.rows[0]?.issues).toContainEqual(
+      expect.objectContaining({ kind: "warning", field: "windowFrom" }),
+    );
+  });
+
+  it("treats a bottle size of 0 as unrecognised and uses 750 ml with a warning", () => {
+    const preview = buildImportRows([row({ Size: "0" })], {
+      source: "cellartracker",
+      mapping: { ...BASE_MAPPING, bottleSize: "Size" },
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(preview.includedCount).toBe(1);
+    expect(preview.drafts[0]).not.toHaveProperty("bottleSize");
+    expect(preview.rows[0]?.issues).toContainEqual(
+      expect.objectContaining({ kind: "warning", field: "bottleSize" }),
+    );
+  });
+
   it("scales a Vivino 5-star rating to the 100-point scale", () => {
     const preview = buildImportRows([row({ MyRating: "4.5" })], {
       source: "vivino",

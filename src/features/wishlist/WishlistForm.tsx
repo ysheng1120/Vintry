@@ -5,10 +5,8 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Sheet } from "../../components/ui/Sheet";
 import { Textarea } from "../../components/ui/Textarea";
-import { useToast } from "../../components/ui/useToast";
-import { commandErrorMessage } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
 import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
-import { undoBatch } from "../../domain/undo";
 import { COLOUR_LABELS, COLOURS, type WishlistItem } from "../../domain/types";
 import { useCurrency } from "../settings/currency";
 
@@ -45,7 +43,7 @@ function stateFor(item: WishlistItem | null): FormState {
 
 /** Add or edit a wishlist item (R8). Saving shows an Undo toast, per KTD7. */
 export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
-  const { toast } = useToast();
+  const { done } = useCommandFeedback();
   const defaultCurrency = useCurrency();
   const [form, setForm] = useState<FormState>(() => stateFor(item));
   const [error, setError] = useState<string | null>(null);
@@ -83,13 +81,7 @@ export function WishlistForm({ open, item, onClose }: WishlistFormProps) {
       const result = item
         ? await updateWishlistItem({ itemId: item.id, patch: fields })
         : await addWishlistItem(fields);
-      toast({
-        title: result.summary,
-        tone: "success",
-        action: result.batchId
-          ? { label: "Undo", onClick: () => void undoBatch(result.batchId!) }
-          : undefined,
-      });
+      done(result);
       onClose();
     } catch (err) {
       setError(commandErrorMessage(err, "Could not save that item."));

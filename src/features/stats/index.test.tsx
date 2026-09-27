@@ -16,6 +16,7 @@ async function seed() {
         vintage: 2015,
         colour: "red",
         country: "France",
+        region: "Bordeaux",
         lots: [{ quantity: 3 }],
       },
     ],
@@ -46,7 +47,7 @@ describe("StatsPage", () => {
     expect(await screen.findByText("No stats yet")).toBeInTheDocument();
   });
 
-  it("charts bottles by colour, country, decade, status and drinks per month, summing to the total", async () => {
+  it("charts bottles by colour, country, region, decade, status and drinks per month, summing to the total", async () => {
     setClock("2026-09-26T09:00:00Z");
     await seed();
     render(<StatsPage />);
@@ -57,6 +58,9 @@ describe("StatsPage", () => {
 
     expect(screen.getByRole("img", { name: /Bottles by country/ })).toHaveAccessibleName(
       /France 2 bottles/,
+    );
+    expect(screen.getByRole("img", { name: /Bottles by region/ })).toHaveAccessibleName(
+      /Bordeaux 2 bottles/,
     );
     expect(screen.getByRole("img", { name: /vintage decade/i })).toHaveAccessibleName(
       /2010s 2 bottles/,

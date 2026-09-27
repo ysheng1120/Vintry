@@ -72,7 +72,20 @@ export async function writeBackupToFolder(
   if (!ok) throw new Error("Vintry needs permission to write to this folder.");
   const fileHandle = await handle.getFileHandle(fileName, { create: true });
   const writable = await fileHandle.createWritable();
-  await writable.write(contents);
+  try {
+    await writable.write(contents);
+  } catch (error) {
+    // Release the stream's lock on the file rather than leaving it held open, so a same-day
+    // retry after a write failure (full disk, revoked permission mid-write) isn't itself blocked.
+    await writable.abort();
+    throw error;
+  }
   await writable.close();
-  await pruneOldBackups(handle);
+  try {
+    await pruneOldBackups(handle);
+  } catch {
+    // The backup file above is already safely written; a folder listing or delete failure while
+    // pruning old copies isn't the collector's problem and shouldn't be reported as a failed
+    // backup (which would also skip markBackupDone and keep nagging for a backup that happened).
+  }
 }

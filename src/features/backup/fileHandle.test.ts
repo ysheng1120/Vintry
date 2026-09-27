@@ -7,10 +7,14 @@ import {
 } from "./fileHandle";
 
 /** A minimal in-memory stand-in for a FileSystemDirectoryHandle, for tests. */
-function fakeDirectoryHandle(initialFiles: string[] = []) {
+function fakeDirectoryHandle(
+  initialFiles: string[] = [],
+  options: { writeError?: Error; abort?: () => Promise<void> } = {},
+) {
   const files = new Set(initialFiles);
   const written: Record<string, string> = {};
   const removed: string[] = [];
+  const abort = vi.fn(options.abort ?? (async () => {}));
   const handle: FileSystemDirectoryHandle = {
     kind: "directory",
     name: "vintry-backups",
@@ -23,9 +27,11 @@ function fakeDirectoryHandle(initialFiles: string[] = []) {
         name,
         createWritable: async () => ({
           write: async (contents: string) => {
+            if (options.writeError) throw options.writeError;
             written[name] = contents;
           },
           close: async () => {},
+          abort,
         }),
       } as unknown as FileSystemFileHandle;
     }),
@@ -37,7 +43,7 @@ function fakeDirectoryHandle(initialFiles: string[] = []) {
       for (const name of files) yield [name, { kind: "file", name }] as [string, FileSystemHandle];
     },
   } as unknown as FileSystemDirectoryHandle;
-  return { handle, files, written, removed };
+  return { handle, files, written, removed, abort };
 }
 
 describe("directoryPickerSupported", () => {
@@ -108,5 +114,29 @@ describe("writeBackupToFolder", () => {
     expect(files.has("vintry-backup-2026-01-01.json")).toBe(false);
     expect(removed).toContain("vintry-backup-2026-01-01.json");
     expect(removed).toContain("vintry-backup-2026-01-02.json");
+  });
+
+  it("aborts the writable stream and rethrows when write() fails", async () => {
+    const writeError = new Error("disk full");
+    const { handle, abort } = fakeDirectoryHandle([], { writeError });
+    await expect(
+      writeBackupToFolder(handle, "vintry-backup-2026-09-26.json", "{}"),
+    ).rejects.toThrow("disk full");
+    expect(abort).toHaveBeenCalled();
+  });
+
+  it("resolves even when pruning old backups fails, since the file was already written", async () => {
+    const older = Array.from(
+      { length: 12 },
+      (_, i) => `vintry-backup-2026-01-${String(i + 1).padStart(2, "0")}.json`,
+    );
+    const { handle, written } = fakeDirectoryHandle(older);
+    handle.removeEntry = vi.fn(async () => {
+      throw new Error("remove failed");
+    });
+    await expect(
+      writeBackupToFolder(handle, "vintry-backup-2026-09-26.json", "{}"),
+    ).resolves.toBeUndefined();
+    expect(written["vintry-backup-2026-09-26.json"]).toBe("{}");
   });
 });

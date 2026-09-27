@@ -12,6 +12,11 @@ import {
   type ImportSourceId,
 } from "./presets";
 
+// Matches YearSchema in src/domain/types.ts; a year outside this range fails importRows'
+// zod validation for the whole batch, so it must be cleared here first (with a warning).
+const MIN_YEAR = 1800;
+const MAX_YEAR = 2200;
+
 export type RowIssueKind = "skipped" | "warning";
 
 export interface RowIssue {
@@ -97,7 +102,12 @@ export function buildImportRows(
       issues.push({ rowIndex, kind: "warning", field, message });
 
     const name = cell(row, options.mapping, "name");
-    const vintage = normalizeVintage(cell(row, options.mapping, "vintage"));
+    const vintageRaw = cell(row, options.mapping, "vintage");
+    let vintage = normalizeVintage(vintageRaw);
+    if (vintage != null && (vintage < MIN_YEAR || vintage > MAX_YEAR)) {
+      warn("vintage", `Vintage "${vintageRaw}" isn't a year; left blank`);
+      vintage = null;
+    }
 
     const colourRaw = cell(row, options.mapping, "colour");
     let colour = normalizeColour(colourRaw);
@@ -122,13 +132,24 @@ export function buildImportRows(
     let bottleSize: number | undefined;
     if (bottleSizeRaw) {
       bottleSize = parseBottleSizeMl(bottleSizeRaw);
-      if (bottleSize === undefined) {
+      if (bottleSize === undefined || bottleSize <= 0) {
         warn("bottleSize", `Bottle size "${bottleSizeRaw}" not recognised; used 750 ml`);
+        bottleSize = undefined;
       }
     }
 
-    let windowFrom = normalizeWindowYear(cell(row, options.mapping, "windowFrom"));
-    let windowTo = normalizeWindowYear(cell(row, options.mapping, "windowTo"));
+    const windowFromRaw = cell(row, options.mapping, "windowFrom");
+    const windowToRaw = cell(row, options.mapping, "windowTo");
+    let windowFrom = normalizeWindowYear(windowFromRaw);
+    let windowTo = normalizeWindowYear(windowToRaw);
+    if (windowFrom != null && (windowFrom < MIN_YEAR || windowFrom > MAX_YEAR)) {
+      warn("windowFrom", `Drinking window start "${windowFromRaw}" isn't a year; left blank`);
+      windowFrom = null;
+    }
+    if (windowTo != null && (windowTo < MIN_YEAR || windowTo > MAX_YEAR)) {
+      warn("windowTo", `Drinking window end "${windowToRaw}" isn't a year; left blank`);
+      windowTo = null;
+    }
     if (windowFrom != null && windowTo != null && windowTo < windowFrom) {
       warn("windowTo", "Drinking window ends before it starts; window cleared");
       windowFrom = null;

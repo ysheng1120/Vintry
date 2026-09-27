@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../../components/ui/Toast";
 import { db } from "../../db/db";
 import { resetDatabase } from "../../db/testing";
-import { addBottles } from "../../domain/commands/wines";
+import { addBottles, deleteWine } from "../../domain/commands/wines";
 import { setClock } from "../../domain/clock";
 import { makeLot, makeWine } from "../../db/testing";
 import HomePage from "./index";
@@ -46,6 +46,21 @@ describe("HomePage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Explore a sample cellar" }));
     await waitFor(async () => expect(await db.wines.count()).toBeGreaterThan(0));
     expect(await screen.findByText(/Loaded the sample cellar/)).toBeInTheDocument();
+  });
+
+  it("shows the refusal reason when undo of the sample load is blocked by a later change", async () => {
+    renderHome();
+    await userEvent.click(await screen.findByRole("button", { name: "Explore a sample cellar" }));
+    await waitFor(async () => expect(await db.wines.count()).toBeGreaterThan(0));
+    await screen.findByText(/Loaded the sample cellar/);
+
+    // A later change touching one of the sample's own wines blocks undoing the load.
+    const wine = (await db.wines.toArray())[0]!;
+    await deleteWine({ wineId: wine.id });
+
+    await userEvent.click(await screen.findByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Couldn't undo")).toBeInTheDocument();
+    expect(await screen.findByText(/A later change touched/)).toBeInTheDocument();
   });
 
   it("lists each wine under the section its window status gives, with counts and cost", async () => {

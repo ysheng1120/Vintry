@@ -96,4 +96,30 @@ describe("unparseCsv", () => {
     const csv = unparseCsv([{ a: "1", b: "two" }], ["b", "a"]);
     expect(csv).toBe("b,a\r\ntwo,1");
   });
+
+  it("prefixes a formula-like cell with a quote so it isn't executed on open (CWE-1236)", () => {
+    const csv = unparseCsv(
+      [
+        { name: "=SUM(A1:A2)" },
+        { name: "+1234" },
+        { name: "@cmd|'/c calc'!A0" },
+        { name: "\tshell" },
+      ],
+      ["name"],
+    );
+    const lines = csv.split("\r\n");
+    expect(lines[1]).toBe('"\'=SUM(A1:A2)"');
+    expect(lines[2]).toBe('"\'+1234"');
+    expect(lines[3]).toBe("\"'@cmd|'/c calc'!A0\"");
+    expect(lines[4]).toBe('"\'\tshell"');
+  });
+
+  it("prefixes a minus sign only when not followed by a digit", () => {
+    const csv = unparseCsv([{ name: "-danger" }, { name: "-5" }, { name: "-5.5" }], ["name"]);
+    const lines = csv.split("\r\n");
+    expect(lines[1]).toBe('"\'-danger"');
+    // A plain negative number, as an exported price or vintage delta, is left unchanged.
+    expect(lines[2]).toBe("-5");
+    expect(lines[3]).toBe("-5.5");
+  });
 });
