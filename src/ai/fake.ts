@@ -15,6 +15,10 @@
  *   ai.queueText("Open the Barolo.");                           // plain text reply
  *   ai.queueResponse({ content: [toolUseBlock], stop_reason: "tool_use" }); // any message
  *   ai.queueError(fakeApiError(429, "rate_limit_error", "slow")); // SDK error
+ *   ai.queueResponse({                                          // server web search
+ *     content: [...fakeWebSearch("srv_1", "query", [{ url, title }]), fakeCitedText(text, [...])],
+ *     stop_reason: "pause_turn",                                // or "end_turn"
+ *   });
  *   ai.requests[0]                                              // parameters actually sent
  *
  * Responses are used in order, one per request; an unexpected request fails loudly.
@@ -85,6 +89,48 @@ export function fakeMessage(overrides: FakeResponse = {}, requestedModel = "clau
 
 function textBlock(text: string): BetaContentBlock {
   return { type: "text", text, citations: null } as BetaContentBlock;
+}
+
+/**
+ * A web search the server ran (server tools need no client step): its `server_tool_use` block
+ * and its `web_search_tool_result`, which holds the results or an error object.
+ */
+export function fakeWebSearch(
+  id: string,
+  query: string,
+  results: { url: string; title: string; pageAge?: string }[] | { errorCode: string },
+): BetaContentBlock[] {
+  const content = Array.isArray(results)
+    ? results.map((r) => ({
+        type: "web_search_result",
+        url: r.url,
+        title: r.title,
+        page_age: r.pageAge ?? null,
+        encrypted_content: "enc",
+      }))
+    : { type: "web_search_tool_result_error", error_code: results.errorCode };
+  return [
+    { type: "server_tool_use", id, name: "web_search", input: { query } },
+    { type: "web_search_tool_result", tool_use_id: id, content },
+  ] as BetaContentBlock[];
+}
+
+/** A text block citing web search results. */
+export function fakeCitedText(
+  text: string,
+  citations: { url: string; title: string | null; citedText: string }[],
+): BetaContentBlock {
+  return {
+    type: "text",
+    text,
+    citations: citations.map((c) => ({
+      type: "web_search_result_location",
+      url: c.url,
+      title: c.title,
+      cited_text: c.citedText,
+      encrypted_index: "idx",
+    })),
+  } as BetaContentBlock;
 }
 
 /** An SDK error for an HTTP status, built the way the SDK builds it from a response. */

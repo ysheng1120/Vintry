@@ -78,6 +78,42 @@ export const WineProfileSchema = z.object({
 });
 export type WineProfile = z.infer<typeof WineProfileSchema>;
 
+/** A web page a critics' summary cites. The URL is shown only when it is http(s). */
+export const CriticSourceSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+});
+export type CriticSource = z.infer<typeof CriticSourceSchema>;
+
+/**
+ * "What critics say": an AI summary of what published critics say about this wine and vintage,
+ * researched on reputable wine sites. Every point and score keeps the page it came from; a
+ * score is kept only when the cited text from that page shows it (checked in code).
+ */
+export const WineCriticsSchema = z.object({
+  /** 2 to 3 plain sentences, or "" when nothing was found. */
+  consensus: z.string(),
+  points: z.array(z.object({ text: z.string(), sources: z.array(CriticSourceSchema) })).default([]),
+  scores: z
+    .array(
+      z.object({
+        critic: z.string(),
+        publication: z.string(),
+        /** As the source writes it, e.g. "94" or "17.5". */
+        score: z.string(),
+        /** "100" or "20". */
+        scale: z.string(),
+        source: CriticSourceSchema,
+      }),
+    )
+    .default([]),
+  /** False when no public critic reviews were found for this vintage. */
+  found: z.boolean(),
+  generatedAt: z.string(),
+  model: z.string(),
+});
+export type WineCritics = z.infer<typeof WineCriticsSchema>;
+
 export const WineSchema = z.object({
   ...base,
   producer: z.string().min(1),
@@ -113,6 +149,8 @@ export const WineSchema = z.object({
   isSample: z.boolean().default(false),
   /** The "About this wine" AI profile, written from this wine's identity. Missing on older rows. */
   profile: WineProfileSchema.nullable().optional(),
+  /** "What critics say", researched on the web from this wine's identity. Missing on older rows. */
+  critics: WineCriticsSchema.nullable().optional(),
 });
 export type Wine = z.infer<typeof WineSchema>;
 

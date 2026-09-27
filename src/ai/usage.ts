@@ -12,6 +12,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   window: "Drinking windows",
   note: "Tasting notes",
   profile: "About this wine",
+  critics: "What critics say",
   csv: "CSV mapping",
   chat: "Sommelier",
   "key-test": "Key checks",
