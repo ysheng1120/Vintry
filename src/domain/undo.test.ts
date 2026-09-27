@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { restoreBackup } from "../db/backup";
+import { restoreBackup, SNAPSHOTS_KEPT } from "../db/backup";
+import type { BackupFile } from "../db/backup-schema";
 import { CURRENT_SCHEMA_VERSION } from "../db/migrations";
 import { db } from "../db/db";
 import { makeWine, resetDatabase } from "../db/testing";
@@ -178,6 +179,87 @@ describe("undoBatch", () => {
     expect(await db.wines.count()).toBe(1);
     expect(await undoBatch(batchId)).toMatchObject({ ok: true });
     expect(await db.wines.count()).toBe(40);
+  });
+});
+
+function backupWith(wines: ReturnType<typeof makeWine>[]): BackupFile {
+  return {
+    app: "vintry",
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      wines,
+      lots: [],
+      consumptions: [],
+      tastingNotes: [],
+      locations: [],
+      wishlist: [],
+      eventBatches: [],
+      chatThreads: [],
+      chatMessages: [],
+      settings: [],
+    },
+  };
+}
+
+const wineNames = async () => (await db.wines.toArray()).map((w) => w.name).sort();
+
+describe("undoing restores and erases in a chain", () => {
+  beforeEach(resetDatabase);
+
+  it("restore A, restore B, undo B, undo A brings the original wines back", async () => {
+    await db.wines.bulkAdd([makeWine({ name: "Original 1" }), makeWine({ name: "Original 2" })]);
+    const first = await restoreBackup(backupWith([makeWine({ name: "From A" })]));
+    const second = await restoreBackup(backupWith([makeWine({ name: "From B" })]));
+
+    expect(await undoBatch(second.batchId)).toMatchObject({ ok: true });
+    expect(await wineNames()).toEqual(["From A"]);
+    // The undone restore stays in the history, marked undone, and does not block the earlier one.
+    expect((await db.eventBatches.get(second.batchId))?.undoneAt).toBeTruthy();
+    expect(await checkUndo(first.batchId)).toEqual({ ok: true });
+
+    expect(await undoBatch(first.batchId)).toMatchObject({ ok: true });
+    expect(await wineNames()).toEqual(["Original 1", "Original 2"]);
+    expect((await db.eventBatches.get(first.batchId))?.undoneAt).toBeTruthy();
+    // Nothing left to undo that would bring B or A back.
+    const open = (await db.eventBatches.toArray()).filter((b) => b.snapshotId && !b.undoneAt);
+    expect(open).toEqual([]);
+  });
+
+  it("erase, restore, undo the restore, undo the erase brings the original wines back", async () => {
+    await db.wines.add(makeWine({ name: "Original" }));
+    const wipe = await wipeAll({});
+    const restore = await restoreBackup(backupWith([makeWine({ name: "From A" })]));
+    expect(await undoBatch(restore.batchId)).toMatchObject({ ok: true });
+    expect(await db.wines.count()).toBe(0);
+    expect(await undoBatch(wipe.batchId!)).toMatchObject({ ok: true });
+    expect(await wineNames()).toEqual(["Original"]);
+  });
+
+  it("keeps the safety copy a restore still needs, however many copies are taken after it", async () => {
+    await db.wines.add(makeWine({ name: "Original" }));
+    const first = await restoreBackup(backupWith([makeWine({ name: "From A" })]));
+    for (let i = 0; i < SNAPSHOTS_KEPT + 2; i++) {
+      // Each restore of B is undone again, so the first restore stays the one to undo.
+      const other = await restoreBackup(backupWith([makeWine({ name: `B${i}` })]));
+      expect(await undoBatch(other.batchId)).toMatchObject({ ok: true });
+    }
+    expect(await db.snapshots.get(first.snapshotId)).toBeDefined();
+    expect(await undoBatch(first.batchId)).toMatchObject({ ok: true });
+    expect(await wineNames()).toEqual(["Original"]);
+  });
+
+  it("refuses plainly, without throwing, when the safety copy is gone", async () => {
+    await db.wines.add(makeWine({ name: "Original" }));
+    const { batchId, snapshotId } = await restoreBackup(backupWith([makeWine({ name: "A" })]));
+    await db.snapshots.delete(snapshotId);
+
+    const reason = "The safety copy for this change is no longer available.";
+    expect(await checkUndo(batchId)).toEqual({ ok: false, reason });
+    const batch = (await db.eventBatches.get(batchId))!;
+    expect((await checkUndoAll([batch])).get(batchId)).toEqual({ ok: false, reason });
+    expect(await undoBatch(batchId)).toEqual({ ok: false, reason });
+    expect(await wineNames()).toEqual(["A"]);
   });
 });
 

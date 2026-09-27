@@ -365,6 +365,16 @@ describe("history, recently deleted, locations and wishlist", () => {
     ]);
   });
 
+  it("counts bottles of deleted wines separately, so a location is not shown as empty", async () => {
+    const { taittinger } = await seed();
+    await deleteWine({ wineId: taittinger.id }); // its 1 bottle is in the kitchen rack
+    const locations = await getLocationsWithCounts();
+    expect(locations.map((l) => [l.location.name, l.bottles, l.wines, l.deletedBottles])).toEqual([
+      ["EuroCave A", 5, 2, 0],
+      ["Kitchen rack", 6, 2, 1],
+    ]);
+  });
+
   it("lists wishlist items newest first", async () => {
     setClock("2026-09-01T09:00:00Z");
     await addWishlistItem({ producer: "Krug" });

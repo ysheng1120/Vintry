@@ -64,6 +64,25 @@ describe("Locations", () => {
     expect(await db.locations.count()).toBe(1);
   });
 
+  it("shows a location holding only deleted wines' bottles as such, and why it can't be deleted", async () => {
+    const rack = makeLocation({ name: "Kitchen rack" });
+    const wine = makeWine({ deletedAt: new Date().toISOString() });
+    await db.locations.add(rack);
+    await db.wines.add(wine);
+    await db.lots.add(makeLot({ wineId: wine.id, locationId: rack.id, quantity: 3 }));
+    const { user } = await openPage();
+    const item = (await screen.findByText("Kitchen rack")).closest("li")!;
+    expect(item).not.toHaveTextContent("Empty");
+    expect(item).toHaveTextContent("Only bottles of wines in Recently deleted");
+    expect(within(item).queryByRole("link", { name: /View bottles/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete Kitchen rack" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Kitchen rack still holds bottles of wines in Recently deleted. Restore and move them, or delete them forever.",
+    );
+    expect(await db.locations.count()).toBe(1);
+  });
+
   it("explains a duplicate name", async () => {
     await db.locations.add(makeLocation({ name: "Kitchen rack" }));
     const { user } = await openPage();

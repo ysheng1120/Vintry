@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { BACKUP_FOLDER_SETTING_KEY } from "../features/backup/fileHandle";
 import { newId } from "../lib/id";
 import {
   exportBackup,
@@ -7,6 +8,8 @@ import {
   parseBackup,
   restoreBackup,
   restoreSnapshot,
+  SNAPSHOTS_KEPT,
+  takeSnapshot,
 } from "./backup";
 import { BACKUP_TABLES, type BackupFile } from "./backup-schema";
 import { db } from "./db";
@@ -130,6 +133,26 @@ describe("backup export and import", () => {
     expect(JSON.stringify(file)).not.toContain("sk-ant-secret");
     expect(file.data).not.toHaveProperty("aiUsage");
     expect(file.data).not.toHaveProperty("snapshots");
+  });
+
+  it("keeps the chosen backup folder on this device: never exported, kept across restore", async () => {
+    // Stands in for the FileSystemDirectoryHandle the browser gives us.
+    const folder = { kind: "directory", name: "Vintry backups" };
+    await setSetting(BACKUP_FOLDER_SETTING_KEY, folder);
+    await setSetting("currency", "USD");
+
+    const file = await exportBackup();
+    expect(file.data.settings.map((row) => row.key)).not.toContain(BACKUP_FOLDER_SETTING_KEY);
+
+    const incoming = validFile({
+      settings: [
+        { key: "currency", value: "EUR" },
+        { key: BACKUP_FOLDER_SETTING_KEY, value: {} },
+      ],
+    });
+    await restoreBackup(incoming);
+    expect(await getSetting(BACKUP_FOLDER_SETTING_KEY, null)).toEqual(folder);
+    expect(await getSetting("currency", null)).toBe("EUR");
   });
 
   it("export then import into an empty database reproduces every table row for row", async () => {
@@ -272,6 +295,23 @@ describe("restore and safety snapshots", () => {
       await restoreBackup(validFile());
     }
     expect(await db.snapshots.count()).toBe(3);
+  });
+
+  it("never prunes a snapshot that a not-undone restore in the history still needs", async () => {
+    await db.wines.add(makeWine());
+    const unneeded = await takeSnapshot("Taken by hand");
+    const { snapshotId, batchId } = await restoreBackup(validFile());
+    for (let i = 0; i < SNAPSHOTS_KEPT + 1; i++) await takeSnapshot(`Later ${i}`);
+
+    expect(await db.snapshots.get(snapshotId)).toBeDefined();
+    expect(await db.snapshots.get(unneeded)).toBeUndefined();
+    expect(await db.snapshots.count()).toBe(SNAPSHOTS_KEPT + 1);
+
+    // Once that restore is undone, its snapshot is no longer needed and can go.
+    await db.eventBatches.update(batchId, { undoneAt: new Date().toISOString() });
+    await takeSnapshot("One more");
+    expect(await db.snapshots.get(snapshotId)).toBeUndefined();
+    expect(await db.snapshots.count()).toBe(SNAPSHOTS_KEPT);
   });
 
   it("restore does not delete the snapshot it just took", async () => {

@@ -1,4 +1,5 @@
-import { restoreSnapshot } from "../db/backup";
+import { hasSnapshot, readSnapshot, replaceTables, snapshotIds } from "../db/backup";
+import { BACKUP_TABLES } from "../db/backup-schema";
 import { db } from "../db/db";
 import { bumpChangesSinceBackup } from "../db/settings";
 import { nowIso } from "./clock";
@@ -24,6 +25,7 @@ const key = (table: string, id: string) => `${table}:${id}`;
 const MISSING = "This change is no longer in the history.";
 const ALREADY_UNDONE = "This change has already been undone.";
 const PERMANENT = "Wines deleted forever can't be brought back.";
+const SNAPSHOT_GONE = "The safety copy for this change is no longer available.";
 
 /** Batches that remove records for good ("Delete forever" and the 30-day purge) cannot be undone. */
 function isPermanent(batch: EventBatch): boolean {
@@ -81,6 +83,9 @@ async function check(batchId: string): Promise<{ batch?: EventBatch; result: Und
     return { batch, result: { ok: false, reason: ALREADY_UNDONE } };
   }
   if (isPermanent(batch)) return { batch, result: { ok: false, reason: PERMANENT } };
+  if (batch.snapshotId && !(await hasSnapshot(batch.snapshotId))) {
+    return { batch, result: { ok: false, reason: SNAPSHOT_GONE } };
+  }
   return { batch, result: checkFor(await findBlocker(batch)) };
 }
 
@@ -111,12 +116,15 @@ export async function checkUndoAll(batches: EventBatch[]): Promise<Map<string, U
   const oldest = batches.map((b) => b.createdAt).sort()[0] ?? "";
   const stored = await db.eventBatches.where("createdAt").aboveOrEqual(oldest).toArray();
   const byId = new Map(stored.map((b) => [b.id, b]));
+  const snapshots = stored.some((b) => b.snapshotId) ? await snapshotIds() : new Set<string>();
   for (const { id } of batches) {
     const batch = byId.get(id);
     if (!batch) checks.set(id, { ok: false, reason: MISSING });
     else if (batch.undoneAt) checks.set(id, { ok: false, reason: ALREADY_UNDONE });
     else if (isPermanent(batch)) checks.set(id, { ok: false, reason: PERMANENT });
-    else checks.set(id, checkFor(blockerAmong(batch, stored)));
+    else if (batch.snapshotId && !snapshots.has(batch.snapshotId)) {
+      checks.set(id, { ok: false, reason: SNAPSHOT_GONE });
+    } else checks.set(id, checkFor(blockerAmong(batch, stored)));
   }
   return checks;
 }
@@ -131,10 +139,7 @@ export async function undoBatch(batchId: string): Promise<UndoResult> {
   if (!first.result.ok || !first.batch) return first.result as UndoResult;
   const batch = first.batch;
 
-  if (batch.snapshotId) {
-    await restoreSnapshot(batch.snapshotId);
-    return { ok: true, summary: `Undid: ${batch.summary}` };
-  }
+  if (batch.snapshotId) return undoReplaceAll(batch, batch.snapshotId);
 
   const tables = [
     db.wines,
@@ -159,6 +164,28 @@ export async function undoBatch(batchId: string): Promise<UndoResult> {
     }
     await db.eventBatches.update(batch.id, { undoneAt: t, updatedAt: t });
     if (batch.source !== "sample") await bumpChangesSinceBackup();
+    return { ok: true, summary: `Undid: ${batch.summary}` };
+  });
+}
+
+/**
+ * Undoes a restore or erase by bringing back the safety snapshot taken just before it (AE6).
+ * The batch itself goes back into the restored history marked undone, so it no longer blocks an
+ * earlier restore or erase from being undone in turn. No new snapshot is taken: undo runs only
+ * when nothing was changed since, and an extra copy would push out older ones still needed.
+ */
+async function undoReplaceAll(batch: EventBatch, snapshotId: string): Promise<UndoResult> {
+  const snapshot = await readSnapshot(snapshotId);
+  if (!snapshot.ok) return { ok: false, reason: SNAPSHOT_GONE };
+
+  return db.transaction("rw", [...BACKUP_TABLES, "snapshots"], async (): Promise<UndoResult> => {
+    // Check again inside the write so a change made meanwhile is never silently replaced.
+    const again = await check(batch.id);
+    if (!again.result.ok) return again.result;
+
+    await replaceTables(snapshot.data);
+    const t = nowIso();
+    await db.eventBatches.put({ ...batch, undoneAt: t, updatedAt: t });
     return { ok: true, summary: `Undid: ${batch.summary}` };
   });
 }

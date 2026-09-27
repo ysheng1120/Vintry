@@ -432,20 +432,30 @@ export interface LocationWithCounts {
   bottles: number;
   openLots: number;
   wines: number;
+  /** Bottles here of wines in Recently deleted: not in the cellar, but they block deleting it. */
+  deletedBottles: number;
 }
+
+const sumQuantity = (lots: Lot[]) => lots.reduce((sum, l) => sum + l.quantity, 0);
 
 /** Locations sorted by name with what they hold. */
 export async function getLocationsWithCounts(): Promise<LocationWithCounts[]> {
   const { wines, lots } = await loadCellar();
   const live = new Set(wines.map((w) => w.id));
-  const open = lots.filter((l) => l.quantity > 0 && live.has(l.wineId));
+  const deletedIds = new Set(
+    (await db.wines.filter((w) => Boolean(w.deletedAt)).toArray()).map((w) => w.id),
+  );
+  const open = lots.filter((l) => l.quantity > 0);
   return (await getLocations()).map((location) => {
-    const here = open.filter((l) => l.locationId === location.id);
+    const at = open.filter((l) => l.locationId === location.id);
+    const here = at.filter((l) => live.has(l.wineId));
+    const deleted = at.filter((l) => deletedIds.has(l.wineId));
     return {
       location,
-      bottles: here.reduce((sum, l) => sum + l.quantity, 0),
+      bottles: sumQuantity(here),
       openLots: here.length,
       wines: new Set(here.map((l) => l.wineId)).size,
+      deletedBottles: sumQuantity(deleted),
     };
   });
 }

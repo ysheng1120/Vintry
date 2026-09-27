@@ -73,10 +73,24 @@ export const deleteLocationCommand = defineCommand({
       .equals(locationId)
       .filter((lot) => lot.quantity > 0)
       .toArray();
-    const held = openLots.reduce((sum, lot) => sum + lot.quantity, 0);
+    // Bottles of wines in Recently deleted still block: restoring the wine would point at a
+    // missing location. They are counted apart because the cellar no longer shows them.
+    const deletedWineIds = new Set(
+      (await db.wines.bulkGet(openLots.map((lot) => lot.wineId)))
+        .filter((wine) => wine?.deletedAt)
+        .map((wine) => wine!.id),
+    );
+    const held = openLots
+      .filter((lot) => !deletedWineIds.has(lot.wineId))
+      .reduce((sum, lot) => sum + lot.quantity, 0);
     if (held > 0) {
       throw new CommandError(
         `${location.name} still holds ${bottles(held)}. Move or drink them first.`,
+      );
+    }
+    if (openLots.length > 0) {
+      throw new CommandError(
+        `${location.name} still holds bottles of wines in Recently deleted. Restore and move them, or delete them forever.`,
       );
     }
     await changes.remove("locations", locationId);

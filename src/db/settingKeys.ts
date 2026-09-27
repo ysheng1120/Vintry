@@ -9,4 +9,6 @@ export const SETTING_KEYS = {
   tourDone: "tourDone",
   lastBackupAt: "lastBackupAt",
   changesSinceBackup: "changesSinceBackup",
+  /** The chosen backup folder's FileSystemDirectoryHandle (device-only). */
+  backupFolder: "backupFolder",
 } as const;

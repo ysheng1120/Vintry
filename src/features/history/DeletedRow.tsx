@@ -2,9 +2,8 @@ import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/useToast";
-import { commandErrorMessage } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
 import { purgeDeleted, restoreWine } from "../../domain/commands/wines";
-import { undoBatch } from "../../domain/undo";
 import { formatDate } from "../../lib/format";
 import { wineLabel } from "../../domain/labels";
 import type { DeletedWine } from "../../domain/selectors";
@@ -12,20 +11,14 @@ import type { DeletedWine } from "../../domain/selectors";
 /** One row in "Recently deleted": Restore, or Delete forever after a confirmation. */
 export function DeletedRow({ item }: { item: DeletedWine }) {
   const { toast } = useToast();
+  const { done } = useCommandFeedback();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   async function onRestore() {
     setBusy(true);
     try {
-      const result = await restoreWine({ wineId: item.wine.id });
-      toast({
-        title: result.summary,
-        tone: "success",
-        action: result.batchId
-          ? { label: "Undo", onClick: () => void undoBatch(result.batchId!) }
-          : undefined,
-      });
+      done(await restoreWine({ wineId: item.wine.id }));
     } catch (err) {
       toast({
         title: commandErrorMessage(err, "Could not restore that wine."),

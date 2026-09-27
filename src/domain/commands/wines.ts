@@ -46,8 +46,8 @@ export interface AddDraftsOutcome {
 }
 
 /**
- * Adds drafts inside a command: each draft attaches to `wineId`, else to a matching wine,
- * else creates a new wine; then each lot draft becomes a lot.
+ * Adds drafts inside a command: each draft attaches to `wineId` (unless it is a sample wine),
+ * else to a matching wine, else creates a new wine; then each lot draft becomes a lot.
  */
 export async function addDrafts(
   changes: ChangeSet,
@@ -65,6 +65,9 @@ export async function addDrafts(
     if (draft.wineId) {
       wine = await changes.get("wines", draft.wineId);
       if (!wine || wine.deletedAt) throw notFound("wine");
+      // Real bottles never attach to a sample wine (clearing samples would remove them), so treat
+      // the draft like one without a wineId: match a real wine, else create one.
+      if (wine.isSample) wine = index.get(wineKey(draft));
     } else {
       wine = index.get(wineKey(draft));
     }

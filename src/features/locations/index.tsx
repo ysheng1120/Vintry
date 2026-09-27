@@ -191,7 +191,9 @@ function LocationRow({ row }: { row: LocationWithCounts }) {
               <p className="text-sm text-ink-muted">
                 {row.bottles > 0
                   ? `${bottles(row.bottles)} in ${pluralize(row.openLots, "lot")} · ${pluralize(row.wines, "wine")}`
-                  : "Empty"}
+                  : row.deletedBottles > 0
+                    ? "Only bottles of wines in Recently deleted"
+                    : "Empty"}
               </p>
             </div>
             {row.bottles > 0 && (

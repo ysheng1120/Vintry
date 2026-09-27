@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { getSetting } from "../../db/settings";
-import { resetDatabase } from "../../db/testing";
+import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../clock";
 import { getCellarList } from "../selectors";
 import { CommandError } from "./core";
@@ -64,6 +64,35 @@ describe("addBottles", () => {
     });
     expect(first.batchId).toBeTruthy();
     expect(await db.wines.count()).toBe(1);
+  });
+
+  it("never attaches real bottles to a sample wine named by wineId: adds a real wine instead", async () => {
+    const sample = makeWine({ ...monteBello, isSample: true });
+    await db.wines.add(sample);
+
+    const result = await addBottles({
+      drafts: [{ ...monteBello, wineId: sample.id, lots: [{ quantity: 2 }] }],
+    });
+
+    const real = (await db.wines.toArray()).filter((w) => !w.isSample);
+    expect(real).toHaveLength(1);
+    expect(real[0]).toMatchObject({ producer: "Ridge", name: "Monte Bello", vintage: 2019 });
+    expect(result.touched.wineIds).toEqual([real[0]?.id]);
+    const lots = await db.lots.toArray();
+    expect(lots).toHaveLength(1);
+    expect(lots[0]).toMatchObject({ wineId: real[0]?.id, quantity: 2, isSample: false });
+  });
+
+  it("re-routes a sample wineId to the matching real wine when there is one", async () => {
+    const sample = makeWine({ ...monteBello, isSample: true });
+    await db.wines.add(sample);
+    await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 1 }] }] });
+    const realId = (await db.wines.filter((w) => !w.isSample).first())?.id;
+
+    await addBottles({ drafts: [{ ...monteBello, wineId: sample.id, lots: [{ quantity: 2 }] }] });
+    expect(await db.wines.count()).toBe(2);
+    expect(await db.lots.where("wineId").equals(sample.id).count()).toBe(0);
+    expect(await db.lots.where("wineId").equals(realId!).count()).toBe(2);
   });
 
   it("treats a magnum as a different wine", async () => {

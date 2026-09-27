@@ -34,7 +34,7 @@ export interface SnapshotSummary {
   bottleCount: number;
 }
 
-/** Reads every backed-up table into the backup format (KTD15). The API key is never included. */
+/** Reads every backed-up table into the backup format (KTD15). Device-only settings stay out. */
 export async function exportBackup(): Promise<BackupFile> {
   return db.transaction("r", BACKUP_TABLES, async () => {
     const [
@@ -168,17 +168,56 @@ export function parseBackup(
   };
 }
 
-/** Stores a full copy of the current data on this device and prunes to the last 3. */
+/**
+ * Stores a full copy of the current data on this device and prunes to the last 3. A snapshot
+ * that a not-undone restore or erase in the history still points at is never pruned, since
+ * undoing that change needs it.
+ */
 export async function takeSnapshot(reason: string): Promise<string> {
   const backup = await exportBackup();
   const id = newId();
-  await db.transaction("rw", db.snapshots, async () => {
+  await db.transaction("rw", db.snapshots, db.eventBatches, async () => {
     await db.snapshots.add({ id, createdAt: nowIso(), reason, backup });
+    const needed = new Set(
+      (await db.eventBatches.filter((b) => Boolean(b.snapshotId) && !b.undoneAt).toArray()).map(
+        (b) => b.snapshotId,
+      ),
+    );
     const all = await db.snapshots.orderBy("createdAt").reverse().primaryKeys();
-    const stale = all.slice(SNAPSHOTS_KEPT);
+    const stale = all.slice(SNAPSHOTS_KEPT).filter((key) => !needed.has(key));
     if (stale.length) await db.snapshots.bulkDelete(stale);
   });
   return id;
+}
+
+/** Whether the snapshot is still on this device, without reading its (large) contents. */
+export async function hasSnapshot(id: string): Promise<boolean> {
+  return (await db.snapshots.where(":id").equals(id).count()) > 0;
+}
+
+/** Ids of every snapshot on this device. */
+export async function snapshotIds(): Promise<Set<string>> {
+  return new Set(await db.snapshots.toCollection().primaryKeys());
+}
+
+export type SnapshotData =
+  | { ok: true; data: BackupData; createdAt: string; reason: string }
+  | { ok: false; message: string };
+
+export const SNAPSHOT_GONE_MESSAGE = "That saved copy is no longer on this device.";
+
+/** Reads and validates a snapshot's data. Never throws. */
+export async function readSnapshot(id: string): Promise<SnapshotData> {
+  const snapshot = await db.snapshots.get(id);
+  if (!snapshot) return { ok: false, message: SNAPSHOT_GONE_MESSAGE };
+  const parsed = parseBackup(snapshot.backup);
+  if (!parsed.ok) return { ok: false, message: parsed.message };
+  return {
+    ok: true,
+    data: parsed.backup.data,
+    createdAt: snapshot.createdAt,
+    reason: snapshot.reason,
+  };
 }
 
 export async function listSnapshots(): Promise<SnapshotSummary[]> {
@@ -193,6 +232,22 @@ export async function listSnapshots(): Promise<SnapshotSummary[]> {
 }
 
 /**
+ * Clears every backed-up table and fills it from `data`, keeping device-only settings. Must run
+ * inside a read-write transaction over `BACKUP_TABLES` (see `replaceAllData`).
+ */
+export async function replaceTables(data: BackupData): Promise<void> {
+  for (const table of BACKUP_TABLES) {
+    if (table === "settings") continue;
+    await db.table(table).clear();
+    await db.table(table).bulkAdd(data[table]);
+  }
+  const keepKeys = new Set(DEVICE_ONLY_SETTING_KEYS);
+  const oldKeys = (await db.settings.toCollection().primaryKeys()).filter((k) => !keepKeys.has(k));
+  await db.settings.bulkDelete(oldKeys);
+  await db.settings.bulkPut(data.settings.filter((row) => !keepKeys.has(row.key)));
+}
+
+/**
  * Replaces every backed-up table with `data` in one transaction and records `batch`
  * (a restore-type event whose undo brings back its snapshot). Device-only settings are kept.
  */
@@ -202,18 +257,7 @@ export async function replaceAllData(
 ): Promise<string> {
   const batchId = newId();
   await db.transaction("rw", BACKUP_TABLES, async () => {
-    for (const table of BACKUP_TABLES) {
-      if (table === "settings") continue;
-      await db.table(table).clear();
-      await db.table(table).bulkAdd(data[table]);
-    }
-    const keepKeys = new Set(DEVICE_ONLY_SETTING_KEYS);
-    const oldKeys = (await db.settings.toCollection().primaryKeys()).filter(
-      (k) => !keepKeys.has(k),
-    );
-    await db.settings.bulkDelete(oldKeys);
-    await db.settings.bulkPut(data.settings.filter((row) => !keepKeys.has(row.key)));
-
+    await replaceTables(data);
     const t = nowIso();
     await db.eventBatches.add({
       id: batchId,
@@ -248,13 +292,11 @@ export async function restoreBackup(
 export async function restoreSnapshot(
   id: string,
 ): Promise<{ snapshotId: string; batchId: string }> {
-  const snapshot = await db.snapshots.get(id);
-  if (!snapshot) throw new Error("That saved copy is no longer on this device.");
-  const parsed = parseBackup(snapshot.backup);
-  if (!parsed.ok) throw new Error(parsed.message);
+  const snapshot = await readSnapshot(id);
+  if (!snapshot.ok) throw new Error(snapshot.message);
 
   const snapshotId = await takeSnapshot("Before bringing back an earlier copy");
-  const batchId = await replaceAllData(parsed.backup.data, {
+  const batchId = await replaceAllData(snapshot.data, {
     command: "restoreSnapshot",
     summary: `Brought back the copy saved ${formatDate(snapshot.createdAt)} (${snapshot.reason.toLowerCase()})`,
     snapshotId,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/useToast";
 import { undoBatch, type UndoCheck } from "../../domain/undo";
+import { commandErrorMessage } from "../cellar/feedback";
 import type { EventBatch } from "../../domain/types";
 import { relativeTime } from "./relativeTime";
 import { EVENT_SOURCE_LABELS } from "./sourceLabels";
@@ -27,6 +28,12 @@ export function HistoryRow({ batch, check }: { batch: EventBatch; check?: UndoCh
       const result = await undoBatch(batch.id);
       if (result.ok) toast({ title: result.summary, tone: "success" });
       else toast({ title: "Can't undo that change", description: result.reason, tone: "danger" });
+    } catch (err) {
+      toast({
+        title: "Can't undo that change",
+        description: commandErrorMessage(err, "Something went wrong. Please try again."),
+        tone: "danger",
+      });
     } finally {
       setBusy(false);
     }

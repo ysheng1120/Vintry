@@ -11,10 +11,11 @@ import {
   WineSchema,
   WishlistItemSchema,
 } from "../domain/types";
+import { SETTING_KEYS } from "./settingKeys";
 
 /**
  * Tables a backup carries (KTD15). `aiUsage` and `snapshots` stay on the device: they are never
- * exported and restore never replaces them. The "apiKey" setting is never exported either.
+ * exported and restore never replaces them. Device-only settings (below) are never exported either.
  */
 export const BACKUP_TABLE_SCHEMAS = {
   wines: WineSchema,
@@ -54,5 +55,11 @@ export const BackupFileSchema = z.object({
 });
 export type BackupFile = z.infer<typeof BackupFileSchema>;
 
-/** Setting keys that belong to this device only: never exported, kept across restore. */
-export const DEVICE_ONLY_SETTING_KEYS: readonly string[] = ["apiKey"];
+/**
+ * Setting keys that belong to this device only: never exported, kept across restore. The API key
+ * is a secret; the backup folder is a browser file handle that means nothing on another device.
+ */
+export const DEVICE_ONLY_SETTING_KEYS: readonly string[] = [
+  SETTING_KEYS.apiKey,
+  SETTING_KEYS.backupFolder,
+];

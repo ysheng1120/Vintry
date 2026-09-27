@@ -3,7 +3,7 @@ import { db } from "../../db/db";
 import { resetDatabase } from "../../db/testing";
 import { consumeBottles } from "./consumption";
 import { createLocation, deleteLocation, renameLocation } from "./locations";
-import { addBottles } from "./wines";
+import { addBottles, deleteWine, purgeDeleted } from "./wines";
 
 describe("locations", () => {
   beforeEach(resetDatabase);
@@ -49,6 +49,33 @@ describe("locations", () => {
       "Kitchen rack still holds 3 bottles. Move or drink them first.",
     );
     expect(await db.locations.count()).toBe(1);
+  });
+
+  it("refuses, naming Recently deleted, when only deleted wines' bottles remain", async () => {
+    await createLocation({ name: "Kitchen rack" });
+    const location = (await db.locations.toArray())[0]!;
+    const added = await addBottles({
+      drafts: [
+        {
+          producer: "Ridge",
+          vintage: 2019,
+          colour: "red",
+          lots: [{ quantity: 3, locationId: location.id }],
+        },
+      ],
+    });
+    const wineId = added.touched.wineIds[0]!;
+    await deleteWine({ wineId });
+
+    await expect(deleteLocation({ locationId: location.id })).rejects.toThrow(
+      "Kitchen rack still holds bottles of wines in Recently deleted. Restore and move them, or delete them forever.",
+    );
+    expect(await db.locations.count()).toBe(1);
+
+    // Once the wine is deleted forever, the location can go.
+    await purgeDeleted({ wineId });
+    await deleteLocation({ locationId: location.id });
+    expect(await db.locations.count()).toBe(0);
   });
 
   it("deletes a location once it is empty", async () => {
