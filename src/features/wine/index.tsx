@@ -26,7 +26,7 @@ import { formatMoney, wineValue } from "../../domain/money";
 import { useWineDetail, type WineDetail } from "../../domain/selectors";
 import { COLOUR_LABELS, type Wine } from "../../domain/types";
 import { formatDate } from "../../lib/format";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import { StatusBadge, WindowSourceBadge } from "../cellar/StatusBadge";
 import { DrinkSheet } from "./DrinkSheet";
 import { EditWineSheet } from "./EditWineSheet";

@@ -5,7 +5,7 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Sheet } from "../../components/ui/Sheet";
 import { Textarea } from "../../components/ui/Textarea";
-import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { addWishlistItem, updateWishlistItem } from "../../domain/commands/wishlist";
 import { COLOUR_LABELS, COLOURS, type WishlistItem } from "../../domain/types";
 import { useCurrency } from "../settings/currency";

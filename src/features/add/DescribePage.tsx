@@ -10,7 +10,7 @@ import { Field } from "../../components/ui/Field";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Textarea } from "../../components/ui/Textarea";
 import type { CommandResult } from "../../domain/commands";
-import { errorMessage, useCommandFeedback } from "../cellar/feedback";
+import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { DraftCard } from "./DraftCard";
 import type { BottleDraft } from "./draft";
 

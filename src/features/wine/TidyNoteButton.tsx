@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { tidyNote } from "../../ai/features/tidyNote";
 import { useAiStatus } from "../../ai/useAiStatus";
 import { Button } from "../../components/ui/Button";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 
 export interface TidyNoteButtonProps {
   /** The note as typed so far. */

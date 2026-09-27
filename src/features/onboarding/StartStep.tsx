@@ -14,7 +14,7 @@ import { Spinner } from "../../components/ui/Spinner";
 import { parseBackup } from "../../db/backup";
 import { restoreBackupCommand } from "../../domain/commands/admin";
 import { loadSampleCellar } from "../../domain/commands/sample";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import { finishOnboarding } from "./firstRun";
 import type { StepProps } from "./StepLayout";
 import { StepLayout } from "./StepLayout";

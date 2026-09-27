@@ -9,7 +9,7 @@ import { Card } from "../../components/ui/Card";
 import type { LotDraft, WineDraft } from "../../domain/commands";
 import { DraftCard } from "../add/DraftCard";
 import type { BottleDraft } from "../add/draft";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 
 const STATUS_BADGES: Record<
   Exclude<ProposalStatus, "pending">,

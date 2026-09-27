@@ -14,7 +14,7 @@ import { createLocation, deleteLocation, renameLocation } from "../../domain/com
 import { bottles } from "../../domain/labels";
 import { useLocationsWithCounts, type LocationWithCounts } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";
-import { errorMessage, useCommandFeedback } from "../cellar/feedback";
+import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 
 /** Where bottles live (R7): add, rename, and delete locations. */
 export default function LocationsPage() {

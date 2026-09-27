@@ -23,7 +23,7 @@ import {
 import { COLOUR_LABELS, COLOURS } from "../../domain/types";
 import { WINDOW_STATUS_LABELS, type WindowStatus } from "../../domain/window";
 import { pluralize } from "../../lib/format";
-import { useCommandFeedback } from "./feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import {
   activeFilterCount,
   readFilters,

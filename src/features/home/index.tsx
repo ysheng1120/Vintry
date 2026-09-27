@@ -10,7 +10,7 @@ import { SkeletonText } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/useToast";
 import { now } from "../../domain/clock";
 import { loadSampleCellar } from "../../domain/commands/sample";
-import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { formatMoney, type CurrencyTotal } from "../../domain/money";
 import { useHomeSections, type CellarRow, type HomeSections } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";

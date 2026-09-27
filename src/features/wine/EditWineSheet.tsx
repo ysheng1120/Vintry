@@ -8,7 +8,7 @@ import {
   type WineValueFields,
 } from "../../domain/commands";
 import type { Wine } from "../../domain/types";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 import {
   validateWineValues,
   wineFieldsFromValues,

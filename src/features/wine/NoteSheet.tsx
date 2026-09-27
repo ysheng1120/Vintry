@@ -7,7 +7,7 @@ import { addTastingNote, type CommandResult } from "../../domain/commands";
 import { wineLabel } from "../../domain/labels";
 import type { Wine } from "../../domain/types";
 import { toIsoDate } from "../../lib/format";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 import { RatingField } from "./RatingField";
 import { isValidIsoDate } from "../add/draft";
 import { SheetForm } from "./SheetForm";

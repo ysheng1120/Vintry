@@ -11,7 +11,7 @@ import { Card } from "../../components/ui/Card";
 import { PageHeader } from "../../components/ui/PageHeader";
 import type { CommandResult } from "../../domain/commands";
 import { prepareLabelImage, type PreparedImage } from "../../lib/image";
-import { errorMessage, useCommandFeedback } from "../cellar/feedback";
+import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { DraftCard } from "./DraftCard";
 import type { BottleDraft } from "./draft";
 

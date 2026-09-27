@@ -6,7 +6,7 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/useToast";
-import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { removeWishlistItem } from "../../domain/commands/wishlist";
 import { wineLabel } from "../../domain/labels";
 import { useWishlist } from "../../domain/selectors";

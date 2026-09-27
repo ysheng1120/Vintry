@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useToast } from "../../components/ui/useToast";
-import { CommandError, type CommandResult } from "../../domain/commands";
-import { undoBatch } from "../../domain/undo";
+import { useToast } from "../components/ui/useToast";
+import { CommandError, type CommandResult } from "../domain/commands";
+import { undoBatch } from "../domain/undo";
 
 /** A plain-language message for a failed command or unexpected error. */
 export function errorMessage(error: unknown): string {

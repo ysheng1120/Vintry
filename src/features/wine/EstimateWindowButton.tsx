@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/useToast";
 import type { Wine } from "../../domain/types";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 
 const userSetWindow = (wine: Wine) =>
   wine.windowSource === "user" && (wine.windowFrom !== null || wine.windowTo !== null);

@@ -6,7 +6,7 @@ import { Textarea } from "../../components/ui/Textarea";
 import { setDrinkingWindow, type CommandResult } from "../../domain/commands";
 import { wineLabel } from "../../domain/labels";
 import type { Wine } from "../../domain/types";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 import { validateWindowValues, yearOrNull } from "../add/draft";
 import { SheetForm } from "./SheetForm";
 

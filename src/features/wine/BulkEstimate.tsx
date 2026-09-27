@@ -21,7 +21,7 @@ import { useToast } from "../../components/ui/useToast";
 import type { CommandResult } from "../../domain/commands";
 import { undoBatch } from "../../domain/undo";
 import { pluralize } from "../../lib/format";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 
 /** The cellar URL parameter that opens the sheet (Home's "Estimate all with AI" links to it). */
 export const ESTIMATE_PARAM = "estimate";

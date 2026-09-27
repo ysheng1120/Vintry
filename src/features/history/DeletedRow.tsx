@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/useToast";
-import { commandErrorMessage, useCommandFeedback } from "../cellar/feedback";
+import { commandErrorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { purgeDeleted, restoreWine } from "../../domain/commands/wines";
 import { formatDate } from "../../lib/format";
 import { wineLabel } from "../../domain/labels";

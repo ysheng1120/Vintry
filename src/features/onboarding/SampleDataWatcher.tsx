@@ -4,7 +4,7 @@ import { useBanner } from "../../app/useBanner";
 import { getSetting, setSetting } from "../../db/settings";
 import { clearSampleCellar } from "../../domain/commands/sample";
 import { onCommandCommitted } from "../../domain/commands/core";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import { countSampleWines, isRealAdd } from "./firstRun";
 import { ONBOARDING_KEYS } from "./settingKeys";
 

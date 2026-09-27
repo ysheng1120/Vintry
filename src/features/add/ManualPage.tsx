@@ -7,7 +7,7 @@ import { SkeletonText } from "../../components/ui/Skeleton";
 import { db } from "../../db/db";
 import { convertWishlistItem, type CommandResult } from "../../domain/commands";
 import type { WishlistItem } from "../../domain/types";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import { DraftCard } from "./DraftCard";
 import type { BottleDraft, DraftCardProps } from "./draft";
 

@@ -14,7 +14,7 @@ import { createLocation, importRows } from "../../domain/commands";
 import { normalizeName } from "../../domain/match";
 import { useLocations } from "../../domain/selectors";
 import { parseCsvFile } from "../../lib/csv";
-import { errorMessage, useCommandFeedback } from "../cellar/feedback";
+import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { NEW_LOCATION } from "../add/draft";
 import { MappingEditor } from "./MappingEditor";
 import { detectImportSource, presetMapping, type CsvMapping, type ImportSourceId } from "./presets";

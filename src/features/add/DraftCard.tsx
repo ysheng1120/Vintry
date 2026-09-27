@@ -18,7 +18,7 @@ import { bottles, wineLabel } from "../../domain/labels";
 import { findMatchingWine, normalizeName } from "../../domain/match";
 import { getLocations } from "../../domain/selectors";
 import type { Location } from "../../domain/types";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 import { LocationSelect } from "../locations/LocationSelect";
 import { WineFieldsForm } from "../wine/WineFieldsForm";
 import {

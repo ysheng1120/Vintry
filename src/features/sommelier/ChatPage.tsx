@@ -23,7 +23,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { db } from "../../db/db";
 import { wineLabel } from "../../domain/labels";
-import { useCommandFeedback } from "../cellar/feedback";
+import { useCommandFeedback } from "../../app/commandFeedback";
 import { BottleCards } from "./BottleCards";
 import { ProposalCard } from "./ProposalCard";
 import { ThreadList } from "./ThreadList";

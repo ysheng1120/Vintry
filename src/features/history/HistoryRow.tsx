@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/useToast";
 import { undoBatch, type UndoCheck } from "../../domain/undo";
-import { commandErrorMessage } from "../cellar/feedback";
+import { commandErrorMessage } from "../../app/commandFeedback";
 import type { EventBatch } from "../../domain/types";
 import { relativeTime } from "./relativeTime";
 import { EVENT_SOURCE_LABELS } from "./sourceLabels";

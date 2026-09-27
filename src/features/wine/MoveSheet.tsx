@@ -7,7 +7,7 @@ import { createLocation, moveBottles, type CommandResult } from "../../domain/co
 import { bottles, wineLabel } from "../../domain/labels";
 import { useLocations, type LotWithLocation } from "../../domain/selectors";
 import type { Wine } from "../../domain/types";
-import { errorMessage } from "../cellar/feedback";
+import { errorMessage } from "../../app/commandFeedback";
 import { NEW_LOCATION, resolveLotLocation } from "../add/draft";
 import { LocationSelect } from "../locations/LocationSelect";
 import { lotLabel } from "./lotLabel";
