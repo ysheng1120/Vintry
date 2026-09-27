@@ -6,6 +6,7 @@ import {
   getLocationsWithCounts,
   getStats,
   getWineDetail,
+  getWishlist,
   type CellarRow,
 } from "../../domain/selectors";
 import { COLOURS } from "../../domain/types";
@@ -53,6 +54,7 @@ export const readToolSchemas = {
     wineId: z.string().min(1).describe("Wine id"),
   }),
   list_locations: z.object({}),
+  list_wishlist: z.object({}),
   cellar_stats: z.object({}),
   get_consumption_history: z.object({
     wineId: z.string().optional().describe("Only this wine; leave out for all wines"),
@@ -75,6 +77,8 @@ export const readToolDescriptions: Record<ReadToolName, string> = {
   get_wine:
     "Read one wine in full: details, drinking window, open lots with ids and quantities, recent drinking and tasting notes.",
   list_locations: "List the storage locations with their ids and how many bottles each holds.",
+  list_wishlist:
+    "List the collector's wishlist, newest first: wines they want to buy, with colour, target price per bottle and their note. These are not in the cellar.",
   cellar_stats:
     "Bottle counts by colour, country, region, vintage decade and window status, and bottles drunk per month over the last year.",
   get_consumption_history: "Bottles drunk, newest first, with date, rating and occasion.",
@@ -240,6 +244,27 @@ async function listLocations(): Promise<ReadOutcome> {
   };
 }
 
+async function listWishlist(): Promise<ReadOutcome> {
+  const items = await getWishlist();
+  return {
+    content: json({
+      items: items.map((item) => ({
+        itemId: item.id,
+        wine: wineLabel(item),
+        colour: item.colour,
+        country: item.country,
+        region: item.region,
+        targetPrice: item.targetPrice,
+        currency: item.currency,
+        note: item.notes,
+      })),
+    }),
+    isError: false,
+    chip: `Read wishlist: ${pluralize(items.length, "item")}`,
+    wineIds: [],
+  };
+}
+
 async function cellarStats(): Promise<ReadOutcome> {
   const stats = await getStats();
   const points = (list: { label: string; value: number }[]) =>
@@ -344,6 +369,8 @@ export async function runReadTool(name: ReadToolName, rawInput: unknown): Promis
         return await getWine(parsed.data as Input<"get_wine">);
       case "list_locations":
         return await listLocations();
+      case "list_wishlist":
+        return await listWishlist();
       case "cellar_stats":
         return await cellarStats();
       case "get_consumption_history":

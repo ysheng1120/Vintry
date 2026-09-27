@@ -82,7 +82,10 @@ export function isProposalTool(name: string): name is ProposalToolName {
 }
 
 /** A card ready to show, before it gets a status and session. */
-export type CardDraft = Pick<Proposal, "kind" | "command" | "input" | "title" | "lines" | "wineId">;
+export type CardDraft = Pick<
+  Proposal,
+  "kind" | "command" | "input" | "title" | "lines" | "wineId" | "expectedUpdatedAt"
+>;
 
 export type Prepared =
   { kind: "card"; card: CardDraft } | { kind: "result"; result: StoredToolResult };
@@ -368,6 +371,7 @@ async function prepareUpdateWine(input: In<"propose_update_wine">): Promise<Prep
       kind: "update-wine",
       command: "updateWine",
       input: { wineId: wine.id, patch },
+      expectedUpdatedAt: wine.updatedAt,
       title: `Edit ${wineLabel(wine)}`,
       lines: keys.map(
         (key) =>
@@ -401,8 +405,10 @@ async function prepareSetWindow(input: In<"propose_set_drinking_window">): Promi
     card: {
       kind: "set-window",
       command: "setDrinkingWindow",
-      // Confirming the card is the collector's own go-ahead to replace their window.
-      input: { ...input, overwrite: true },
+      // Confirming a card that warned about it is the collector's go-ahead to replace their
+      // window. A window they set after the card was made is caught as stale on confirm.
+      input: { ...input, overwrite: userSet },
+      expectedUpdatedAt: wine.updatedAt,
       title: `Set the drinking window for ${wineLabel(wine)}`,
       lines,
       wineId: wine.id,
@@ -490,21 +496,42 @@ async function storedState(res: CommandResult) {
   };
 }
 
-async function checkPreconditions(proposal: Proposal): Promise<StoredToolResult | null> {
+type Stale = { toolResult: StoredToolResult; reason: string };
+
+function gone(content: string): Stale {
+  return { toolResult: { content, isError: true }, reason: content };
+}
+
+async function checkPreconditions(proposal: Proposal): Promise<Stale | null> {
   const { input } = proposal;
   if (typeof input.lotId === "string" && typeof input.expectedQuantity === "number") {
     const lot = await db.lots.get(input.lotId);
     const wine = lot ? await db.wines.get(lot.wineId) : undefined;
     if (!lot || !wine || wine.deletedAt) {
-      return { content: "That lot no longer exists. Nothing was changed.", isError: true };
+      return gone("That lot no longer exists. Nothing was changed.");
     }
     if (lot.quantity !== input.expectedQuantity) {
       const stale = await quantityChanged(lot, wine, input.expectedQuantity);
-      return stale.kind === "result" ? stale.result : null;
+      if (stale.kind === "result") {
+        return { toolResult: stale.result, reason: "The bottles changed since this was proposed." };
+      }
     }
   }
-  if (typeof input.wineId === "string" && !(await liveWine(input.wineId))) {
-    return { content: "That wine no longer exists. Nothing was changed.", isError: true };
+  if (typeof input.wineId === "string") {
+    const wine = await liveWine(input.wineId);
+    if (!wine) return gone("That wine no longer exists. Nothing was changed.");
+    if (proposal.expectedUpdatedAt !== undefined && wine.updatedAt !== proposal.expectedUpdatedAt) {
+      return {
+        toolResult: {
+          content: JSON.stringify({
+            status: "wine_changed",
+            message: `${wineLabel(wine)} was changed since this was proposed. Nothing was changed. Read it again with get_wine and check with the collector before proposing again.`,
+          }),
+          isError: false,
+        },
+        reason: "The wine changed since this was proposed.",
+      };
+    }
   }
   return null;
 }
@@ -518,10 +545,7 @@ export async function applyProposal(
   drafts?: WineDraft[],
 ): Promise<ApplyOutcome> {
   const stale = await checkPreconditions(proposal);
-  if (stale) {
-    const reason = stale.isError ? stale.content : "The bottles changed since this was proposed.";
-    return { status: "stale", reason, toolResult: stale };
-  }
+  if (stale) return { status: "stale", ...stale };
   const command = commands[proposal.command as CommandName] as Command | undefined;
   if (!command || command.humanOnly) {
     const reason = "The sommelier cannot run this change.";

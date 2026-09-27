@@ -10,10 +10,18 @@ import { AiError } from "./errors";
 
 /**
  * Removes every opening and closing `<tag>` fence (any case) from untrusted text, so the text
- * cannot close the fence the prompt wraps it in. `tag` is a plain word, not a pattern.
+ * cannot close the fence the prompt wraps it in. `tag` is a plain word, not a pattern. It
+ * repeats until nothing changes, so nested pieces like `<</tag>/tag>` cannot rebuild a tag.
  */
 export function stripFence(tag: string, text: string): string {
-  return text.replace(new RegExp(`</?${tag}>`, "gi"), "");
+  const fence = new RegExp(`</?${tag}>`, "gi");
+  let previous: string;
+  let current = text;
+  do {
+    previous = current;
+    current = current.replace(fence, "");
+  } while (current !== previous);
+  return current;
 }
 
 /** Part of the user's message: text, or a base64 image (already downscaled, KTD14). */

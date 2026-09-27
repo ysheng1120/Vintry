@@ -40,6 +40,11 @@ const ProposalSchema = z.object({
   /** What will change, one line each. */
   lines: z.array(z.string()),
   wineId: z.string().nullable(),
+  /**
+   * The target wine's updatedAt when the card was made (update-wine and set-window cards).
+   * A different value on confirm means the wine changed since, so the card is stale.
+   */
+  expectedUpdatedAt: z.string().optional(),
   status: z.enum(PROPOSAL_STATUSES),
   /** The page session that created the card; cards from an earlier session expire. */
   sessionId: z.string(),

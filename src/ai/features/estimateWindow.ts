@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { db } from "../../db/db";
 import { currentYear } from "../../domain/clock";
-import { setDrinkingWindow, type CommandResult } from "../../domain/commands";
+import { CommandError, setDrinkingWindow, type CommandResult } from "../../domain/commands";
 import { wineLabel } from "../../domain/labels";
 import { getCellarList } from "../../domain/selectors";
 import type { Wine } from "../../domain/types";
@@ -133,14 +133,22 @@ const hasWindow = (wine: Wine) => wine.windowFrom !== null || wine.windowTo !== 
 
 /**
  * Applies estimates only to wines that still have no window (one may have been set while the
- * request ran). Returns the results of the windows applied.
+ * request ran). A wine the command refuses, for example because the collector set its window
+ * a moment ago, is skipped. Each applied result is pushed to `results` (returned) as it lands,
+ * so a later failure cannot drop windows already applied from Undo all.
  */
-export async function applyNewWindows(estimates: WindowEstimate[]): Promise<CommandResult[]> {
-  const results: CommandResult[] = [];
+export async function applyNewWindows(
+  estimates: WindowEstimate[],
+  results: CommandResult[] = [],
+): Promise<CommandResult[]> {
   for (const estimate of estimates) {
     const wine = await db.wines.get(estimate.wineId);
     if (!wine || wine.deletedAt || hasWindow(wine)) continue;
-    results.push(await applyWindowEstimate(estimate));
+    try {
+      results.push(await applyWindowEstimate(estimate));
+    } catch (error) {
+      if (!(error instanceof CommandError)) throw error;
+    }
   }
   return results;
 }
@@ -212,7 +220,7 @@ export async function estimateMissingWindows(
 
     try {
       const estimates = await estimateWindows(batch, { signal });
-      results.push(...(await applyNewWindows(estimates)));
+      await applyNewWindows(estimates, results);
     } catch (thrown) {
       const error = toAiError(thrown);
       return error.kind === "aborted" ? finish(true, null) : finish(false, error);

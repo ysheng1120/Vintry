@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { systemPromptText } from "./prompt";
 import { sommelierTools } from "./tools";
 
 describe("sommelierTools", () => {
@@ -9,6 +10,7 @@ describe("sommelierTools", () => {
       "get_consumption_history",
       "get_wine",
       "list_locations",
+      "list_wishlist",
       "propose_add_bottles",
       "propose_adjust_quantity",
       "propose_consume",
@@ -19,6 +21,15 @@ describe("sommelierTools", () => {
       "show_bottles",
     ]);
     expect(sommelierTools()).toBe(sommelierTools());
+  });
+
+  it("offers the wishlist as a read tool with no input", () => {
+    const wishlist = sommelierTools().find((tool) => tool.name === "list_wishlist");
+    expect(wishlist?.description).toMatch(/wishlist/i);
+    expect(wishlist?.input_schema).toMatchObject({ type: "object", properties: {} });
+    expect(systemPromptText({ locale: "en-GB", currency: "GBP" })).toMatch(
+      /wishlist.*list_wishlist/i,
+    );
   });
 
   it("generates proposal schemas from the command inputs, with a quantity precondition", () => {

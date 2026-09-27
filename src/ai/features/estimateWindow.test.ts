@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/db";
 import { makeLot, makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
@@ -181,6 +181,38 @@ describe("estimateMissingWindows", () => {
       windowFrom: 2025,
       windowSource: "user",
     });
+  });
+
+  it("skips a wine whose window the collector sets mid-run and keeps the rest for Undo all", async () => {
+    const wines = await addWines(3);
+    const target = wines[1]?.id ?? "";
+    queueEstimatesFor(wines, 1);
+    // The collector sets a window right after the run checked this wine had none.
+    const get = db.wines.get.bind(db.wines);
+    let raced = false;
+    const spy = vi.spyOn(db.wines, "get").mockImplementation((async (key: string) => {
+      const wine = await get(key);
+      if (key === target && !raced) {
+        raced = true;
+        await db.wines.update(target, { windowFrom: 2025, windowTo: 2026, windowSource: "user" });
+      }
+      return wine;
+    }) as typeof db.wines.get);
+
+    const result = await estimateMissingWindows();
+    spy.mockRestore();
+
+    expect(raced).toBe(true);
+    expect(result.error).toBeNull();
+    expect(result.estimated).toBe(2);
+    expect(result.results).toHaveLength(2);
+    expect(result.results.every((r) => r.batchId)).toBe(true);
+    expect(await db.wines.get(target)).toMatchObject({
+      windowFrom: 2025,
+      windowTo: 2026,
+      windowSource: "user",
+    });
+    expect(await withWindow()).toBe(3);
   });
 
   it("stops with the error and keeps the windows already applied", async () => {

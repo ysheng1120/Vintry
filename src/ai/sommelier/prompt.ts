@@ -19,6 +19,7 @@ export function systemPromptText({ locale, currency }: PromptSettings): string {
 How the cellar is organised:
 - A wine is an identity: producer, cuvée name, vintage (or NV), colour, region, grapes and bottle size. A magnum is a different wine from a 750 ml bottle.
 - A lot is a number of bottles of one wine at one location, with an optional bin. A wine can have several lots. Lots at zero are closed and kept for history.
+- The wishlist holds wines the collector wants to buy, with a target price and a note. They are not in the cellar; read it with list_wishlist.
 - Drinking window statuses: Hold (too young), Ready, Drink soon (the window ends within a year), Past peak, No window. A window marked "AI estimate" was estimated, not set by the collector.
 
 Facts and recommendations:

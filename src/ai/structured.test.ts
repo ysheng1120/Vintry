@@ -166,4 +166,9 @@ describe("stripFence", () => {
       "a  b  c <Note/> <notes>",
     );
   });
+
+  it("removes tags until none remain, so nested pieces cannot rebuild a fence", () => {
+    expect(stripFence("note", "a<</note>/note>b")).toBe("ab");
+    expect(stripFence("csv", "<<<csv>/csv>/CSV>x")).toBe("x");
+  });
 });
