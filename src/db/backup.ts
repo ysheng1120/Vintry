@@ -24,6 +24,24 @@ export const NEWER_VERSION_MESSAGE =
 /** How many safety snapshots stay on the device. */
 export const SNAPSHOTS_KEPT = 3;
 
+/** Tables a backup must contain for a restore: the cellar records themselves. */
+export const REQUIRED_TABLES = [
+  "wines",
+  "lots",
+  "consumptions",
+  "tastingNotes",
+  "locations",
+] as const satisfies readonly (typeof BACKUP_TABLES)[number][];
+
+/** Wines (not deleted) and bottles in a backup, shown before a restore replaces the data. */
+export function backupCounts(backup: BackupFile): { wines: number; bottles: number } {
+  const wineIds = new Set(backup.data.wines.filter((w) => !w.deletedAt).map((w) => w.id));
+  const bottles = backup.data.lots
+    .filter((lot) => wineIds.has(lot.wineId))
+    .reduce((sum, lot) => sum + lot.quantity, 0);
+  return { wines: wineIds.size, bottles };
+}
+
 export type ParseBackupResult = { ok: true; backup: BackupFile } | { ok: false; message: string };
 
 export interface SnapshotSummary {
@@ -122,6 +140,14 @@ export function parseBackup(
   const targetVersion = latestVersion(versions);
   if (schemaVersion > targetVersion) return { ok: false, message: NEWER_VERSION_MESSAGE };
   if (data !== undefined && !isRecord(data)) return { ok: false, message: NOT_VINTRY_MESSAGE };
+
+  // Every export writes every table. A file without the cellar's own tables is cut short or
+  // hand-made, and restoring it would silently empty the cellar, so it is refused.
+  for (const table of REQUIRED_TABLES) {
+    if (!Array.isArray(data?.[table])) {
+      return { ok: false, message: `This backup is damaged: it has no "${table}" list.` };
+    }
+  }
 
   const rawTables: Record<string, Row[]> = {};
   for (const table of BACKUP_TABLES) {

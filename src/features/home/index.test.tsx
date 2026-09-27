@@ -80,7 +80,7 @@ describe("HomePage", () => {
       vintage: 2021,
       colour: "white",
       windowFrom: 2022,
-      windowTo: 2027,
+      windowTo: 2026,
       lots: [{ quantity: 2, pricePerBottle: 20, currency: "GBP" }],
     });
     await addWine({

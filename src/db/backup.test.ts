@@ -10,6 +10,7 @@ import {
   restoreSnapshot,
   SNAPSHOTS_KEPT,
   takeSnapshot,
+  backupCounts,
 } from "./backup";
 import { BACKUP_TABLES, type BackupFile } from "./backup-schema";
 import { db } from "./db";
@@ -243,17 +244,73 @@ describe("backup export and import", () => {
     expect(result.backup.data.wines[0]?.producer).toBe("Ridge");
   });
 
-  it("fills defaults for optional fields and treats missing tables as empty", () => {
+  it("fills defaults for optional fields and treats missing optional tables as empty", () => {
     const wine = { id: newId(), createdAt: t, updatedAt: t, producer: "Krug", vintage: null };
     const result = parseBackup({
       app: "vintry",
       schemaVersion: 1,
       exportedAt: t,
-      data: { wines: [{ ...wine, colour: "sparkling" }] },
+      data: {
+        wines: [{ ...wine, colour: "sparkling" }],
+        lots: [],
+        consumptions: [],
+        tastingNotes: [],
+        locations: [],
+      },
     });
     if (!result.ok) throw new Error(result.message);
     expect(result.backup.data.wines[0]).toMatchObject({ bottleSize: 750, grapes: [], name: "" });
-    expect(result.backup.data.lots).toEqual([]);
+    expect(result.backup.data.chatThreads).toEqual([]);
+    expect(result.backup.data.settings).toEqual([]);
+  });
+
+  it("refuses a file without the cellar's own tables, so a cut-short file never empties the cellar", () => {
+    const wine = { id: newId(), createdAt: t, updatedAt: t, producer: "Krug", vintage: null };
+    const partial = parseBackup({
+      app: "vintry",
+      schemaVersion: 1,
+      exportedAt: t,
+      data: { wines: [{ ...wine, colour: "sparkling" }] },
+    });
+    expect(partial).toEqual({
+      ok: false,
+      message: 'This backup is damaged: it has no "lots" list.',
+    });
+    const empty = parseBackup({ app: "vintry", schemaVersion: 1, exportedAt: t, data: {} });
+    expect(empty).toEqual({
+      ok: false,
+      message: 'This backup is damaged: it has no "wines" list.',
+    });
+    expect(parseBackup({ app: "vintry", schemaVersion: 1, exportedAt: t }).ok).toBe(false);
+  });
+
+  it("counts the wines and bottles a backup holds, leaving out deleted wines", () => {
+    const kept = { id: newId(), createdAt: t, updatedAt: t, producer: "Krug", vintage: null };
+    const gone = { ...kept, id: newId(), deletedAt: t };
+    const lot = (wineId: string, quantity: number) => ({
+      id: newId(),
+      createdAt: t,
+      updatedAt: t,
+      wineId,
+      quantity,
+    });
+    const result = parseBackup({
+      app: "vintry",
+      schemaVersion: 1,
+      exportedAt: t,
+      data: {
+        wines: [
+          { ...kept, colour: "sparkling" },
+          { ...gone, colour: "sparkling" },
+        ],
+        lots: [lot(kept.id, 4), lot(gone.id, 9)],
+        consumptions: [],
+        tastingNotes: [],
+        locations: [],
+      },
+    });
+    if (!result.ok) throw new Error(result.message);
+    expect(backupCounts(result.backup)).toEqual({ wines: 1, bottles: 4 });
   });
 });
 

@@ -205,6 +205,21 @@ describe("importRows", () => {
 describe("updateWine", () => {
   beforeEach(resetDatabase);
 
+  it("marks a window from a sommelier edit as an AI estimate, never as the collector's", async () => {
+    await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 1 }] }] });
+    const wine = (await db.wines.toArray())[0]!;
+    await updateWine(
+      { wineId: wine.id, patch: { windowFrom: 2027, windowTo: 2040 } },
+      { source: "ai-chat" },
+    );
+    expect((await db.wines.get(wine.id))?.windowSource).toBe("ai");
+    await updateWine(
+      { wineId: wine.id, patch: { windowFrom: 2028, windowTo: 2041, windowSource: "user" } },
+      { source: "ai-chat" },
+    );
+    expect((await db.wines.get(wine.id))?.windowSource).toBe("ai");
+  });
+
   it("changes the given fields and marks a hand-edited window as user-set", async () => {
     await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 1 }] }] });
     const wine = (await db.wines.toArray())[0]!;

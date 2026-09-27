@@ -114,12 +114,17 @@ describe("unparseCsv", () => {
     expect(lines[4]).toBe('"\'\tshell"');
   });
 
-  it("prefixes a minus sign only when not followed by a digit", () => {
-    const csv = unparseCsv([{ name: "-danger" }, { name: "-5" }, { name: "-5.5" }], ["name"]);
+  it("prefixes a leading minus unless the whole cell is a plain negative number", () => {
+    const csv = unparseCsv(
+      [{ name: "-danger" }, { name: "-5" }, { name: "-5.5" }, { name: "-2+3+cmd|' /C calc'!A0" }],
+      ["name"],
+    );
     const lines = csv.split("\r\n");
     expect(lines[1]).toBe('"\'-danger"');
     // A plain negative number, as an exported price or vintage delta, is left unchanged.
     expect(lines[2]).toBe("-5");
     expect(lines[3]).toBe("-5.5");
+    // A minus and a digit that start a formula are still quoted.
+    expect(lines[4]).toBe("\"'-2+3+cmd|' /C calc'!A0\"");
   });
 });

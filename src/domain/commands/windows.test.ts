@@ -27,6 +27,26 @@ async function seedWine(window?: {
 describe("setDrinkingWindow", () => {
   beforeEach(resetDatabase);
 
+  it("records a sommelier window as an AI estimate even when it asks for user", async () => {
+    const wine = await seedWine();
+    await setDrinkingWindow(
+      { wineId: wine.id, from: 2028, to: 2045, source: "user" },
+      { source: "ai-chat" },
+    );
+    expect((await db.wines.get(wine.id))?.windowSource).toBe("ai");
+  });
+
+  it("still refuses to replace the collector's window when a sommelier change asks as user", async () => {
+    const wine = await seedWine({ windowFrom: 2025, windowTo: 2030, windowSource: "user" });
+    await expect(
+      setDrinkingWindow(
+        { wineId: wine.id, from: 2028, to: 2045, source: "user" },
+        { source: "ai-chat" },
+      ),
+    ).rejects.toThrow(/set this wine's drinking window yourself/);
+    expect(await db.wines.get(wine.id)).toMatchObject({ windowFrom: 2025, windowSource: "user" });
+  });
+
   it("applies an AI estimate to a wine with no window", async () => {
     const wine = await seedWine();
     const result = await setDrinkingWindow(

@@ -8,6 +8,7 @@ import {
   parseBackup,
   type BackupFile,
   type SnapshotSummary,
+  backupCounts,
 } from "../../db/backup";
 import { getSetting, setSetting, useSetting } from "../../db/settings";
 import { restoreBackupCommand, restoreSnapshotCommand, wipeAll } from "../../domain/commands";
@@ -18,7 +19,9 @@ import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Sheet } from "../../components/ui/Sheet";
 import { useToast } from "../../components/ui/useToast";
-import { formatDate, toIsoDate } from "../../lib/format";
+import { db } from "../../db/db";
+import { bottles } from "../../domain/labels";
+import { formatDate, pluralize, toIsoDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import {
   AUTO_BACKUPS_KEPT,
@@ -186,6 +189,22 @@ function AutoBackupCard() {
 }
 
 /** Export, backup, and restore, with a safety snapshot always taken first (R21, R22, R23). */
+/** What a restore replaces with what, so a short or empty file is noticed before it is used. */
+function restoreDescription(
+  backup: BackupFile,
+  current: { wines: number; bottles: number } | null,
+): string {
+  const counts = backupCounts(backup);
+  const has =
+    counts.wines === 0
+      ? "It has no wines at all."
+      : `It has ${pluralize(counts.wines, "wine")} and ${bottles(counts.bottles)}.`;
+  const now = current
+    ? ` This device has ${pluralize(current.wines, "wine")} and ${bottles(current.bottles)} now.`
+    : "";
+  return `This backup was made ${formatDate(backup.exportedAt)}. ${has}${now} Everything currently on this device will be replaced. A safety copy is saved first.`;
+}
+
 export default function BackupPage() {
   const { done, failed } = useCommandFeedback();
   const { toast } = useToast();
@@ -206,6 +225,10 @@ export default function BackupPage() {
   const [backingUp, setBackingUp] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [pendingRestore, setPendingRestore] = useState<BackupFile | null>(null);
+  /** Wines and bottles on this device now, shown next to the backup's counts before a restore. */
+  const [currentCounts, setCurrentCounts] = useState<{ wines: number; bottles: number } | null>(
+    null,
+  );
   const [restoring, setRestoring] = useState(false);
   const [pendingSnapshotId, setPendingSnapshotId] = useState<string | null>(null);
   const [restoringSnapshotId, setRestoringSnapshotId] = useState<string | null>(null);
@@ -299,6 +322,12 @@ export default function BackupPage() {
       setRestoreError(result.message);
       return;
     }
+    const [wines, lots] = await Promise.all([db.wines.toArray(), db.lots.toArray()]);
+    const wineIds = new Set(wines.filter((w) => !w.deletedAt).map((w) => w.id));
+    setCurrentCounts({
+      wines: wineIds.size,
+      bottles: lots.filter((l) => wineIds.has(l.wineId)).reduce((sum, l) => sum + l.quantity, 0),
+    });
     setPendingRestore(result.backup);
   }
 
@@ -498,11 +527,7 @@ export default function BackupPage() {
         onClose={() => setPendingRestore(null)}
         onConfirm={() => void confirmRestore()}
         title="Replace all data with this backup?"
-        description={
-          pendingRestore
-            ? `This backup was made ${formatDate(pendingRestore.exportedAt)}. Everything currently on this device will be replaced. A safety copy is saved first.`
-            : undefined
-        }
+        description={pendingRestore ? restoreDescription(pendingRestore, currentCounts) : undefined}
         word="REPLACE"
         confirmLabel="Replace data"
         busy={restoring}

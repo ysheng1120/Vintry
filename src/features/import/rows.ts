@@ -5,6 +5,9 @@ import { parseLocaleNumber } from "../../lib/csv";
 import { toIsoDate } from "../../lib/format";
 import { newId } from "../../lib/id";
 import {
+  CELLARTRACKER_STYLE_HEADERS,
+  cellarTrackerPending,
+  cellarTrackerStyleText,
   normalizeColour,
   normalizeVintage,
   normalizeWindowYear,
@@ -63,6 +66,24 @@ export interface BuildImportRowsOptions {
   locations?: { id: string; name: string }[];
   /** Makes ids for new locations; tests pass a fixed one. */
   makeId?: () => string;
+}
+
+/**
+ * The cuvée name without the producer in front: CellarTracker's Wine column (and many
+ * spreadsheets) repeats the producer, which would show as "Krug Krug Grande Cuvée". Matching
+ * ignores case, accents, and punctuation. A name that is only the producer becomes "".
+ */
+export function withoutProducerPrefix(name: string, producer: string): string {
+  const target = normalizeName(producer);
+  if (!target || !normalizeName(name).startsWith(target)) return name;
+  for (let i = 1; i <= name.length; i += 1) {
+    if (normalizeName(name.slice(0, i)) !== target) continue;
+    const next = name.charAt(i);
+    // Only a whole-word prefix: "Krug" leaves "Krugerhof" alone.
+    if (next && /[\p{L}\p{N}]/u.test(next)) return name;
+    return name.slice(i).replace(/^[\s,;:–—-]+/u, "");
+  }
+  return name;
 }
 
 function cell(row: Record<string, string>, mapping: CsvMapping, field: ImportField): string {
@@ -124,7 +145,7 @@ export function buildImportRows(
     const warn = (field: ImportField, message: string) =>
       issues.push({ rowIndex, kind: "warning", field, message });
 
-    const name = cell(row, options.mapping, "name");
+    const name = withoutProducerPrefix(cell(row, options.mapping, "name"), producer);
     const vintageRaw = cell(row, options.mapping, "vintage");
     let vintage = normalizeVintage(vintageRaw);
     if (vintage != null && (vintage < MIN_YEAR || vintage > MAX_YEAR)) {
@@ -132,7 +153,14 @@ export function buildImportRows(
       vintage = null;
     }
 
-    const colourRaw = cell(row, options.mapping, "colour");
+    // CellarTracker: read Type and Category with Color, so sparkling, dessert, and fortified
+    // wines keep their style (unless the collector mapped the colour to another column).
+    const ctStyle =
+      options.source === "cellartracker" &&
+      CELLARTRACKER_STYLE_HEADERS.some(
+        (h) => h.toLowerCase() === options.mapping.colour?.trim().toLowerCase(),
+      );
+    const colourRaw = ctStyle ? cellarTrackerStyleText(row) : cell(row, options.mapping, "colour");
     let colour = normalizeColour(colourRaw);
     if (!colour) {
       if (colourRaw) warn("colour", `Colour "${colourRaw}" not recognised; set to Red`);
@@ -199,14 +227,38 @@ export function buildImportRows(
     const notes = cell(row, options.mapping, "notes") || null;
 
     const quantityRaw = cell(row, options.mapping, "quantity");
+    const pending = options.source === "cellartracker" ? cellarTrackerPending(row) : 0;
     let quantity = 1;
     if (quantityRaw) {
       const parsed = parseLocaleNumber(quantityRaw);
+      if (parsed === 0) {
+        // No bottles in the cellar: a CellarTracker row with only bottles on order (futures),
+        // or a row for a wine already drunk. Importing it as 1 bottle would invent one.
+        result.push({
+          rowIndex,
+          draft: null,
+          issues: [
+            {
+              rowIndex,
+              kind: "skipped",
+              field: "quantity",
+              message:
+                pending > 0
+                  ? `${pending} on order, none delivered yet; row skipped`
+                  : "0 bottles; row skipped",
+            },
+          ],
+        });
+        return;
+      }
       if (parsed === null || parsed < 1) {
         warn("quantity", `Quantity "${quantityRaw}" isn't a whole number; assumed 1 bottle`);
       } else {
         quantity = Math.round(parsed);
       }
+    }
+    if (pending > 0) {
+      warn("quantity", `${pending} more on order were left out; add them when they arrive`);
     }
 
     const locationRaw = cell(row, options.mapping, "location");

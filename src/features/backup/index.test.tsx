@@ -89,6 +89,12 @@ describe("BackupPage", () => {
     await userEvent.upload(input, backupFile("backup.json", JSON.stringify(backup)));
 
     await screen.findByText("Replace all data with this backup?");
+    // The counts come first, so a short or empty file is noticed before it replaces the data.
+    expect(
+      screen.getByText(
+        /It has 1 wine and \d+ bottles?\. This device has 0 wines and 0 bottles now\./,
+      ),
+    ).toBeInTheDocument();
     const wordField = screen.getByLabelText('Type "REPLACE" to confirm');
     const confirmButton = screen.getByRole("button", { name: "Replace data" });
     expect(confirmButton).toBeDisabled();

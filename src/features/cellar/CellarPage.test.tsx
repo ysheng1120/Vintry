@@ -50,6 +50,14 @@ async function seed() {
 const rows = () => within(screen.getByRole("list", { name: "Wines" })).getAllByRole("link");
 
 describe("Cellar list", () => {
+  it("shows a bottle size other than 750 ml on the row", async () => {
+    const magnum = makeWine({ producer: "Ridge", name: "Monte Bello", bottleSize: 1500 });
+    await db.wines.add(magnum);
+    await db.lots.add(makeLot({ wineId: magnum.id }));
+    renderCellarApp("/cellar");
+    expect(await screen.findByRole("link", { name: /Monte Bello/ })).toHaveTextContent("1.5 L");
+  });
+
   it("lists a part-drunk wine under Drunk with bottles drunk and bottles left", async () => {
     await seed();
     const ridge = (await db.wines.where("producer").equals("Ridge").first())!;

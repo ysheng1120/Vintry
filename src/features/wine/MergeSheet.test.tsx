@@ -55,6 +55,29 @@ describe("MergeSheet", () => {
     ).toBeInTheDocument();
   });
 
+  it("lists only wines of the same bottle size, and says how many others it left out", async () => {
+    const keep = makeWine({ producer: "Ridge", name: "Monte Bello", vintage: 2019 });
+    const magnum = makeWine({
+      producer: "Ridge",
+      name: "Monte Bello",
+      vintage: 2019,
+      bottleSize: 1500,
+    });
+    const krug = makeWine({ producer: "Krug", name: "Grande Cuvée", vintage: null });
+    await db.wines.bulkAdd([keep, magnum, krug]);
+
+    renderSheet(keep);
+    const dialog = await screen.findByRole("dialog", { name: "Merge with another wine" });
+    expect(
+      await within(dialog).findByRole("button", { name: "Krug Grande Cuvée NV" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /1\.5 L/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Likely duplicates")).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/1 wine with another bottle size is not listed\./),
+    ).toBeInTheDocument();
+  });
+
   it("filters the list by search text", async () => {
     const keep = makeWine({ producer: "Ridge", name: "Monte Bello", vintage: 2019 });
     const krug = makeWine({ producer: "Krug", name: "Grande Cuvée", vintage: null });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
-import { makeWine, resetDatabase } from "../../db/testing";
+import { makeLot, makeWine, resetDatabase } from "../../db/testing";
 import { undoBatch } from "../undo";
 import { CommandError } from "./core";
 import { consumeBottles } from "./consumption";
@@ -196,6 +196,19 @@ describe("mergeWines", () => {
     await expect(mergeWines({ keepId: sample.id, mergeId: keep.id })).rejects.toThrow(
       /sample data/,
     );
+  });
+
+  it("refuses to merge wines of different bottle sizes and writes nothing", async () => {
+    const standard = makeWine({ ...ridge });
+    const magnum = makeWine({ ...ridge, bottleSize: 1500 });
+    await db.wines.bulkAdd([standard, magnum]);
+    await db.lots.add(makeLot({ id: "lot-750", wineId: standard.id, quantity: 18 }));
+
+    await expect(mergeWines({ keepId: magnum.id, mergeId: standard.id })).rejects.toThrow(
+      /different bottle sizes \(1\.5 L and 750 ml\)/,
+    );
+    expect((await db.lots.get("lot-750"))?.wineId).toBe(standard.id);
+    expect((await db.wines.get(standard.id))?.deletedAt).toBeFalsy();
   });
 
   it("writes nothing when the input is invalid", async () => {

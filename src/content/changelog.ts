@@ -15,6 +15,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.0",
+    date: "2026-09-27",
+    headline: "Safer CellarTracker imports, merges, and restores.",
+    changes: [
+      "CellarTracker import: Champagne comes in as sparkling, Port as fortified, and sweet wines as dessert. The producer is no longer repeated in the wine name. Rows with bottles only on order are skipped.",
+      "A row with 0 bottles is now skipped instead of being imported as 1 bottle.",
+      "Merge lists only wines with the same bottle size, so magnums never turn into 750 ml bottles. Cellar rows show sizes other than 750 ml.",
+      "A drinking window the sommelier suggests is always marked as an AI estimate, even after you confirm it.",
+      "Drink soon now means the window ends this year.",
+      "Restore refuses a backup file that is cut short, and shows how many wines and bottles it has before you replace your data.",
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-09-27",
     headline: "Suggested price, locations kept on import, and more ways to sort.",

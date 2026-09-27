@@ -80,10 +80,11 @@ export function parseLocaleNumber(raw: string | null | undefined): number | null
 }
 
 // Matches a cell that a spreadsheet would read as a formula on open: a leading =, +, @, tab, or
-// CR, or a minus sign not followed by a digit (so a plain negative number is left alone). Papa's
-// own `escapeFormulae: true` treats any leading minus as a formula, which would also quote
+// CR, or a leading minus unless the whole cell is a plain negative number ("-12.50" is left
+// alone; "-2+3+cmd|..." is not, since a spreadsheet evaluates it). Papa's own
+// `escapeFormulae: true` treats any leading minus as a formula, which would also quote
 // ordinary negative prices; this custom pattern is the CWE-1236 mitigation without that cost.
-const FORMULA_INJECTION_PATTERN = /^[=+@\t\r]|^-(?!\d)/;
+const FORMULA_INJECTION_PATTERN = /^[=+@\t\r]|^-(?!\d+(?:[.,]\d+)?$)/;
 
 /** Builds CSV text from plain objects, in the given column order (KTD13's parser, Papa). */
 export function unparseCsv(rows: Record<string, unknown>[], columns: string[]): string {

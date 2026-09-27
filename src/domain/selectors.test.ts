@@ -76,7 +76,7 @@ async function seed() {
         region: "Mosel",
         grapes: ["Riesling"],
         windowFrom: 2022,
-        windowTo: 2027,
+        windowTo: 2026,
         lots: [{ quantity: 2, locationId: kitchen.id, pricePerBottle: 20, currency: "GBP" }],
       },
     ],

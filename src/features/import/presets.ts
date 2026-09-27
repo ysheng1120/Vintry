@@ -69,9 +69,36 @@ const cellarTrackerPreset: Preset = {
       windowTo: ["EndConsume"],
       rating: ["PScore"],
       notes: ["PNotes"],
+      purchaseDate: ["PurchaseDate", "Purchase Date"],
+      store: ["StoreName", "Store"],
     });
   },
 };
+
+/**
+ * CellarTracker spreads a wine's style over three columns: Color says red or white, while
+ * Category and Type say sparkling, sweet/dessert, or fortified. Reading Color alone makes
+ * Champagne white and Port red, so the importer reads all three together.
+ */
+export const CELLARTRACKER_STYLE_HEADERS = ["Type", "Category", "Color"] as const;
+
+/** The CellarTracker row's style columns joined, most specific first ("" when none). */
+export function cellarTrackerStyleText(row: Record<string, string>): string {
+  const byName = new Map(Object.keys(row).map((key) => [key.trim().toLowerCase(), key]));
+  return CELLARTRACKER_STYLE_HEADERS.map((name) => {
+    const key = byName.get(name.toLowerCase());
+    return key ? (row[key] ?? "").trim() : "";
+  })
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** CellarTracker's count of bottles on order (not delivered yet), or 0. */
+export function cellarTrackerPending(row: Record<string, string>): number {
+  const key = Object.keys(row).find((k) => k.trim().toLowerCase() === "pending");
+  const value = key ? Number.parseInt((row[key] ?? "").trim(), 10) : 0;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 
 const vivinoPreset: Preset = {
   id: "vivino",

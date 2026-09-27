@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CsvMapping } from "./presets";
-import { buildImportRows } from "./rows";
+import { buildImportRows, withoutProducerPrefix } from "./rows";
 
 const BASE_MAPPING: CsvMapping = {
   producer: "Producer",
@@ -265,5 +265,118 @@ describe("buildImportRows", () => {
       defaultCurrency: null,
     });
     expect(preview.drafts[0]?.rating).toBe(90);
+  });
+});
+
+describe("withoutProducerPrefix", () => {
+  it("removes the producer from the start of the name, ignoring case and accents", () => {
+    expect(withoutProducerPrefix("Krug Grande Cuvée", "Krug")).toBe("Grande Cuvée");
+    expect(withoutProducerPrefix("chateau margaux Pavillon Rouge", "Château Margaux")).toBe(
+      "Pavillon Rouge",
+    );
+    expect(withoutProducerPrefix("Ridge - Monte Bello", "Ridge")).toBe("Monte Bello");
+    expect(withoutProducerPrefix("Château Margaux", "Château Margaux")).toBe("");
+  });
+
+  it("leaves a name alone when the producer is not a whole word at its start", () => {
+    expect(withoutProducerPrefix("Grande Cuvée", "Krug")).toBe("Grande Cuvée");
+    expect(withoutProducerPrefix("Krugerhof Riesling", "Krug")).toBe("Krugerhof Riesling");
+    expect(withoutProducerPrefix("Monte Bello", "")).toBe("Monte Bello");
+  });
+});
+
+describe("CellarTracker rows", () => {
+  const CT_MAPPING: CsvMapping = {
+    producer: "Producer",
+    name: "Wine",
+    vintage: "Vintage",
+    colour: "Color",
+    quantity: "Quantity",
+  };
+  const ct = (overrides: Record<string, string>) => ({
+    Producer: "Krug",
+    Wine: "Krug Grande Cuvée",
+    Vintage: "1001",
+    Color: "White",
+    Category: "Sparkling",
+    Type: "White - Sparkling",
+    Quantity: "2",
+    Pending: "0",
+    ...overrides,
+  });
+  const build = (rows: Record<string, string>[]) =>
+    buildImportRows(rows, {
+      source: "cellartracker",
+      mapping: CT_MAPPING,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+
+  it("reads Type and Category with Color, so Champagne is sparkling and Port fortified", () => {
+    const preview = build([
+      ct({}),
+      ct({
+        Producer: "Taylor Fladgate",
+        Wine: "Taylor Fladgate Vintage Port",
+        Vintage: "2011",
+        Color: "Red",
+        Category: "Fortified",
+        Type: "Red - Fortified",
+      }),
+      ct({
+        Producer: "Château d'Yquem",
+        Wine: "Château d'Yquem",
+        Vintage: "2009",
+        Color: "White",
+        Category: "Sweet/Dessert",
+        Type: "White - Sweet/Dessert",
+      }),
+      ct({
+        Producer: "Ridge",
+        Wine: "Ridge Monte Bello",
+        Color: "Red",
+        Category: "Dry",
+        Type: "Red",
+      }),
+    ]);
+    expect(preview.drafts.map((d) => d.colour)).toEqual([
+      "sparkling",
+      "fortified",
+      "dessert",
+      "red",
+    ]);
+    expect(preview.drafts.map((d) => d.name)).toEqual([
+      "Grande Cuvée",
+      "Vintage Port",
+      "",
+      "Monte Bello",
+    ]);
+  });
+
+  it("skips a row with only bottles on order, and warns about pending bottles on a row", () => {
+    const preview = build([
+      ct({ Quantity: "0", Pending: "6" }),
+      ct({ Quantity: "2", Pending: "3" }),
+    ]);
+    expect(preview.drafts).toHaveLength(1);
+    expect(preview.rows[0]?.issues[0]).toMatchObject({
+      kind: "skipped",
+      message: "6 on order, none delivered yet; row skipped",
+    });
+    expect(preview.drafts[0]?.lots?.[0]?.quantity).toBe(2);
+    expect(preview.rows[1]?.issues.map((i) => i.message)).toContain(
+      "3 more on order were left out; add them when they arrive",
+    );
+  });
+
+  it("skips a row with 0 bottles instead of importing it as 1 bottle", () => {
+    const preview = buildImportRows([row({ Quantity: "0" })], {
+      source: "generic",
+      mapping: BASE_MAPPING,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(preview.drafts).toHaveLength(0);
+    expect(preview.rows[0]?.issues[0]?.message).toBe("0 bottles; row skipped");
   });
 });

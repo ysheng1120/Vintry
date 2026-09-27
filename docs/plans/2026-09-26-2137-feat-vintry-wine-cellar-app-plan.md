@@ -46,7 +46,7 @@ The collector has bottles spread across racks and a fridge, bought over years, e
 - R1. The app stores wines and their lots for one collector: a Wine is the identity (producer, cuvée, vintage or NV, colour, country, region, appellation, grapes, bottle size), and a Lot is a quantity of that wine at one location with purchase details.
 - R2. The user can add, edit, move, and drink bottles by hand, with no AI key and while offline.
 - R3. Drinking a bottle records a consumption event (date, quantity, optional rating, note, occasion) and never deletes history. A wine with zero bottles stays visible under a "Drunk" filter.
-- R4. Each wine shows a drinking-window status: Hold, Ready, Drink soon (window ends within 12 months), Past peak, or No window. The source of the window (user, AI, import) is visible.
+- R4. Each wine shows a drinking-window status: Hold, Ready, Drink soon (window ends this year), Past peak, or No window. The source of the window (user, AI, import) is visible.
 - R5. The user can search, filter (colour, country, region, status, location), and sort the cellar, and find any wine in under three taps from Home.
 - R6. Any change can be undone in one tap from a toast or from the History screen, when no later change touched the same records.
 - R7. The user can define locations (for example "Kitchen rack", "EuroCave A") with optional bin text on each lot.
@@ -204,7 +204,7 @@ stateDiagram-v2
   Failed --> [*]
 ```
 
-Drinking-window status (R4), evaluated with the current year Y: no `windowFrom` and no `windowTo` gives No window; Y < `windowFrom` gives Hold; Y > `windowTo` gives Past peak; `windowTo` − Y ≤ 1 gives Drink soon; otherwise Ready.
+Drinking-window status (R4), evaluated with the current year Y: no `windowFrom` and no `windowTo` gives No window; Y < `windowFrom` gives Hold; Y > `windowTo` gives Past peak; `windowTo` = Y gives Drink soon (windows are whole years, so Drink soon means drink this year); otherwise Ready.
 
 ### Output Structure
 
@@ -367,7 +367,7 @@ Wave A: U1, then U4 in parallel with one worker that builds U2 and then U3 (U3 n
   - A real add matching a sample wine creates a new wine, not a lot under the sample.
   - `deleteWine` sets `deletedAt`, hides the wine from selectors, and undo restores it; purge removes soft-deleted wines older than 30 days.
   - `setDrinkingWindow` with source `ai` on an empty window applies; with a user-set window it requires the `overwrite` flag.
-  - Window status: for year 2026, window 2028 to 2035 gives Hold, 2020 to 2027 gives Drink soon, 2020 to 2024 gives Past peak, 2022 to 2030 gives Ready, none gives No window.
+  - Window status: for year 2026, window 2028 to 2035 gives Hold, 2020 to 2026 gives Drink soon, 2020 to 2027 gives Ready, 2020 to 2024 gives Past peak, 2022 to 2030 gives Ready, none gives No window.
   - Cost grouped by currency returns separate GBP and USD totals and never sums across currencies.
   - Registry: every command has a schema, and every `humanOnly` command has a reason.
 - **Verification:** All domain tests pass; no component writes to Dexie outside the command layer (lint rule or grep check in CI).

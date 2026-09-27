@@ -2,8 +2,8 @@ import { z } from "zod";
 import { db } from "../../db/db";
 import { nowIso } from "../clock";
 import type { ChangeSet } from "../events";
-import { wineLabel } from "../labels";
-import type { RecordTableName, Wine } from "../types";
+import { bottleSizeLabel, wineLabel } from "../labels";
+import { DEFAULT_BOTTLE_SIZE, type RecordTableName, type Wine } from "../types";
 import { CommandError, defineCommand, notFound, type CommandContext } from "./core";
 
 function isEmptyValue(value: unknown): boolean {
@@ -102,6 +102,16 @@ export const mergeWinesCommand = defineCommand({
     if (keep.isSample !== merged.isSample) {
       throw new CommandError(
         "One of these is sample data and the other is a real wine, so they can't be merged.",
+      );
+    }
+
+    // Lots carry no size of their own: merging a 750 ml wine into a 1.5 L one would turn its
+    // bottles into magnums. Each bottle size is its own wine (the matcher keys on size too).
+    const keepSize = keep.bottleSize ?? DEFAULT_BOTTLE_SIZE;
+    const mergedSize = merged.bottleSize ?? DEFAULT_BOTTLE_SIZE;
+    if (keepSize !== mergedSize) {
+      throw new CommandError(
+        `These wines have different bottle sizes (${bottleSizeLabel(keepSize)} and ${bottleSizeLabel(mergedSize)}), so they can't be merged. If a size is wrong, edit that wine first.`,
       );
     }
 

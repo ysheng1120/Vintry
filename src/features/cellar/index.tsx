@@ -12,7 +12,7 @@ import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { CELLAR_SEARCH_ID } from "../../app/useKeyboardShortcuts";
 import { loadSampleCellar } from "../../domain/commands";
-import { bottles } from "../../domain/labels";
+import { bottles, bottleSizeLabel } from "../../domain/labels";
 import {
   filterCellarRows,
   useCellarList,
@@ -20,7 +20,7 @@ import {
   type CellarRow,
   type CellarSort,
 } from "../../domain/selectors";
-import { COLOUR_LABELS, COLOURS } from "../../domain/types";
+import { COLOUR_LABELS, COLOURS, DEFAULT_BOTTLE_SIZE } from "../../domain/types";
 import { WINDOW_STATUS_LABELS, type WindowStatus } from "../../domain/window";
 import { pluralize } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
@@ -440,6 +440,9 @@ function CellarRowLink({ row, drunkView }: { row: CellarRow; drunkView: boolean 
             <Badge tone="accent" title="Drinking window estimated by AI">
               AI
             </Badge>
+          )}
+          {(wine.bottleSize ?? DEFAULT_BOTTLE_SIZE) !== DEFAULT_BOTTLE_SIZE && (
+            <Badge>{bottleSizeLabel(wine.bottleSize ?? DEFAULT_BOTTLE_SIZE)}</Badge>
           )}
           {wine.isSample && <Badge>Sample</Badge>}
           {meta && <span className="min-w-0 truncate">{meta}</span>}

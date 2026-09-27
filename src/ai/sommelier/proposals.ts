@@ -402,9 +402,10 @@ async function prepareSetWindow(input: In<"propose_set_drinking_window">): Promi
     wine.windowSource === "user" && (wine.windowFrom !== null || wine.windowTo !== null);
   const lines = [
     `Drinking window: ${rangeText(wine.windowFrom, wine.windowTo)} → ${rangeText(input.from, input.to)}`,
-    ...(input.source === "ai" ? ["Marked as an AI estimate"] : []),
+    // Whatever the sommelier sends, the command records its window as an AI estimate.
+    "Marked as an AI estimate",
     ...(input.note ? [`Why: ${input.note}`] : []),
-    ...(userSet && input.source !== "user" ? ["Replaces the window you set yourself"] : []),
+    ...(userSet ? ["Replaces the window you set yourself"] : []),
   ];
   return {
     kind: "card",

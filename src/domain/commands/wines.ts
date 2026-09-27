@@ -5,7 +5,8 @@ import { nowIso } from "../clock";
 import type { ChangeSet } from "../events";
 import { bottles, wineLabel } from "../labels";
 import { isMatchCandidate, normalizeName, wineKey } from "../match";
-import { LotSchema, WineSchema, type EventSource, type Wine, type WindowSource } from "../types";
+import { LotSchema, WineSchema, type EventSource, type Wine } from "../types";
+import { allowedWindowSource } from "../window";
 import {
   cleanPatch,
   cleanText,
@@ -18,12 +19,6 @@ import { WineDraftSchema, WineFieldsSchema, WineValueFieldsSchema } from "./sche
 import { pluralize } from "../../lib/format";
 
 type ParsedDraft = z.output<typeof WineDraftSchema>;
-
-function defaultWindowSource(source: EventSource): WindowSource {
-  if (source === "import") return "import";
-  if (source.startsWith("ai-")) return "ai";
-  return "user";
-}
 
 function checkWindow(from: number | null | undefined, to: number | null | undefined) {
   if (from != null && to != null && to < from) {
@@ -89,7 +84,7 @@ export async function addDrafts(
         bottleSize: draft.bottleSize,
         windowFrom: draft.windowFrom ?? null,
         windowTo: draft.windowTo ?? null,
-        windowSource: hasWindow ? (draft.windowSource ?? defaultWindowSource(source)) : null,
+        windowSource: hasWindow ? allowedWindowSource(source, draft.windowSource) : null,
         windowNote: cleanText(draft.windowNote),
         thumbnail: draft.thumbnail ?? null,
         rating: draft.rating ?? null,
@@ -260,9 +255,10 @@ export const updateWineCommand = defineCommand({
       const from = next.windowFrom !== undefined ? next.windowFrom : wine.windowFrom;
       const to = next.windowTo !== undefined ? next.windowTo : wine.windowTo;
       checkWindow(from, to);
-      if (patch.windowSource === undefined) {
-        next.windowSource = from === null && to === null ? null : "user";
-      }
+      // Only the collector's own edit records "user": an AI edit is always "ai", so AI never
+      // passes its estimate off as the collector's.
+      next.windowSource =
+        from === null && to === null ? null : allowedWindowSource(source, patch.windowSource);
     }
     const updated = await changes.update("wines", wineId, next);
     return { summary: `Edited ${wineLabel(updated)}` };

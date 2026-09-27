@@ -6,7 +6,9 @@ const w = (windowFrom: number | null, windowTo: number | null) => ({ windowFrom,
 describe("windowStatus", () => {
   it("follows the rule for 2026", () => {
     expect(windowStatus(w(2028, 2035), 2026)).toBe("hold");
-    expect(windowStatus(w(2020, 2027), 2026)).toBe("drink-soon");
+    // Windows are whole years: "drink soon" means the window ends this year.
+    expect(windowStatus(w(2020, 2026), 2026)).toBe("drink-soon");
+    expect(windowStatus(w(2020, 2027), 2026)).toBe("ready");
     expect(windowStatus(w(2020, 2024), 2026)).toBe("past-peak");
     expect(windowStatus(w(2022, 2030), 2026)).toBe("ready");
     expect(windowStatus(w(null, null), 2026)).toBe("none");

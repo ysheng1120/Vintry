@@ -2,7 +2,7 @@ import { z } from "zod";
 import { wineLabel } from "../labels";
 import { WindowSourceSchema, YearSchema } from "../types";
 import { cleanText, CommandError, defineCommand, notFound, type CommandContext } from "./core";
-import { windowRange } from "../window";
+import { allowedWindowSource, windowRange } from "../window";
 
 const SetWindowInput = z.object({
   wineId: z.string().min(1),
@@ -24,22 +24,24 @@ export const setDrinkingWindowCommand = defineCommand({
   description:
     "Set or clear a wine's drinking window. An AI or import window never replaces one the user set unless overwrite is true.",
   input: SetWindowInput,
-  async execute(input, changes) {
+  async execute(input, changes, { source: eventSource }) {
     const wine = await changes.get("wines", input.wineId);
     if (!wine || wine.deletedAt) throw notFound("wine");
     if (input.from !== null && input.to !== null && input.to < input.from) {
       throw new CommandError("The drinking window ends before it starts.", "invalid-input");
     }
+    // An AI change never records "user", whatever it asks for (the sommelier cannot claim it).
+    const source = allowedWindowSource(eventSource, input.source);
     const userSet =
       wine.windowSource === "user" && (wine.windowFrom !== null || wine.windowTo !== null);
-    if (input.source !== "user" && userSet && !input.overwrite) {
+    if (source !== "user" && userSet && !input.overwrite) {
       throw new CommandError(USER_WINDOW_MESSAGE);
     }
     const cleared = input.from === null && input.to === null;
     await changes.update("wines", wine.id, {
       windowFrom: input.from,
       windowTo: input.to,
-      windowSource: cleared ? null : input.source,
+      windowSource: cleared ? null : source,
       windowNote: cleared ? null : cleanText(input.note),
     });
     const range = cleared ? "none" : windowRange(input.from, input.to);

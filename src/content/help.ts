@@ -129,6 +129,10 @@ export const HELP_SECTIONS: HelpSection[] = [
           "Click Merge. Its bottles, drinks, and notes move to the wine you kept, and the duplicate is deleted.",
         ],
       },
+      {
+        kind: "text",
+        text: "Only wines with the same bottle size can merge: a magnum is its own wine. If a size is wrong, edit that wine first.",
+      },
       { kind: "text", text: "Changed your mind? Undo it from the toast or from History." },
     ],
   },
@@ -181,6 +185,10 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
+        text: "From CellarTracker, Vintry reads the style from Type and Category too, so Champagne comes in as sparkling and Port as fortified. It removes the producer from the start of the wine name. Rows with no bottles, or with bottles only on order, are skipped and marked in the preview.",
+      },
+      {
+        kind: "text",
         text: "Rows that match bottles already in your cellar (same wine, count, price, purchase date, and location) are marked Already in your cellar and left out. Tick them if you really want to add them again.",
       },
       {
@@ -204,7 +212,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
-        text: "To restore one of those files, open More → Backup & restore → Restore from backup and choose a file from that folder.",
+        text: "To restore one of those files, open More → Backup & restore → Restore from backup and choose a file from that folder. Before it replaces your data, Vintry shows how many wines and bottles the file has.",
       },
       { kind: "text", text: "You can also back up by hand:" },
       {

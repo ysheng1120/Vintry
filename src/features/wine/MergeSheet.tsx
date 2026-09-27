@@ -8,7 +8,7 @@ import { db } from "../../db/db";
 import { mergeWines } from "../../domain/commands";
 import { bottles, wineLabel } from "../../domain/labels";
 import { normalizeName } from "../../domain/match";
-import type { Wine } from "../../domain/types";
+import { DEFAULT_BOTTLE_SIZE, type Wine } from "../../domain/types";
 import { pluralize } from "../../lib/format";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { SheetForm } from "./SheetForm";
@@ -68,19 +68,23 @@ export function MergeSheet({ wine, onClose }: MergeSheetProps) {
   const [error, setError] = useState<string | null>(null);
 
   const words = useMemo(() => normalizeName(search).split(" ").filter(Boolean), [search]);
+  // Only wines of the same bottle size can merge (mergeWines refuses the rest).
+  const size = wine.bottleSize ?? DEFAULT_BOTTLE_SIZE;
+  const sameSize = useMemo(
+    () => (others ?? []).filter((w) => (w.bottleSize ?? DEFAULT_BOTTLE_SIZE) === size),
+    [others, size],
+  );
+  const otherSizeCount = (others?.length ?? 0) - sameSize.length;
   const likely = useMemo(
     () =>
-      (others ?? []).filter(
+      sameSize.filter(
         (w) =>
           normalizeName(w.producer) === normalizeName(wine.producer) && w.vintage === wine.vintage,
       ),
-    [others, wine.producer, wine.vintage],
+    [sameSize, wine.producer, wine.vintage],
   );
   const likelyIds = useMemo(() => new Set(likely.map((w) => w.id)), [likely]);
-  const rest = useMemo(
-    () => (others ?? []).filter((w) => !likelyIds.has(w.id)),
-    [others, likelyIds],
-  );
+  const rest = useMemo(() => sameSize.filter((w) => !likelyIds.has(w.id)), [sameSize, likelyIds]);
   const filteredLikely = likely.filter((w) => matches(w, words));
   const filteredRest = rest.filter((w) => matches(w, words));
 
@@ -125,8 +129,12 @@ export function MergeSheet({ wine, onClose }: MergeSheetProps) {
       </Field>
 
       <div className="flex max-h-64 flex-col gap-3 overflow-y-auto">
-        {others === undefined ? null : others.length === 0 ? (
-          <p className="text-sm text-ink-muted">There's no other wine in your cellar yet.</p>
+        {others === undefined ? null : sameSize.length === 0 ? (
+          <p className="text-sm text-ink-muted">
+            {others.length === 0
+              ? "There's no other wine in your cellar yet."
+              : "No other wine has this bottle size."}
+          </p>
         ) : filteredLikely.length === 0 && filteredRest.length === 0 ? (
           <p className="text-sm text-ink-muted">No wines match that search.</p>
         ) : (
@@ -150,6 +158,15 @@ export function MergeSheet({ wine, onClose }: MergeSheetProps) {
           </>
         )}
       </div>
+
+      {otherSizeCount > 0 && (
+        <p className="text-sm text-ink-subtle">
+          {otherSizeCount === 1
+            ? "1 wine with another bottle size is not listed."
+            : `${otherSizeCount} wines with another bottle size are not listed.`}{" "}
+          Each bottle size is its own wine.
+        </p>
+      )}
 
       {selected && counts && (
         <p className="rounded-xl bg-surface-muted px-4 py-3 text-sm text-ink">

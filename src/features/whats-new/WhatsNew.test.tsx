@@ -61,7 +61,7 @@ describe("WhatsNewPage", () => {
     render(<RouterProvider router={router} />);
     expect(screen.getByRole("heading", { level: 1, name: "What's new" })).toBeInTheDocument();
     const versions = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(versions[0]).toContain("1.4.0");
+    expect(versions[0]).toContain("1.5.0");
     expect(versions.some((v) => v?.includes("1.0.0"))).toBe(true);
     expect(screen.getByText(/Import from CellarTracker and Vivino/)).toBeInTheDocument();
   });
