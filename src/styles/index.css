@@ -357,3 +357,31 @@
     }
   }
 }
+
+/* ---------- Print (cellar's printable list, R-print) ---------- */
+@media print {
+  /* App chrome: the sidebar/rail/bottom navigation, the mobile brand bar above it, toasts and
+     banners. A screen's own content hides the rest (its header actions, filters, on-screen rows)
+     next to a print-only table, e.g. src/features/cellar/PrintList.tsx. */
+  aside[aria-label="Main navigation"],
+  nav[aria-label="Main"],
+  header:has(+ main),
+  section[aria-label="Notifications"],
+  section[aria-label="Notices"] {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body {
+    color: #000 !important;
+  }
+
+  /* Rows of a printable table (added by the page, e.g. `print-row`) never split across a page. */
+  .print-row {
+    break-inside: avoid;
+  }
+}

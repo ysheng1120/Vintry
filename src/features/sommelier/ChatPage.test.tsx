@@ -122,6 +122,47 @@ describe("Sommelier chat", () => {
     expect(screen.getByTestId("path").textContent).toContain(`?wine=${wine.id}`);
   });
 
+  it("prefills the composer from ?ask= without sending it, and clears the param", async () => {
+    await saveApiKey("sk-ant-test");
+
+    const { user } = renderChat(
+      `/sommelier?ask=${encodeURIComponent("  What should I open tonight?  ")}`,
+    );
+    const input = await screen.findByRole("textbox", { name: /ask the sommelier/i });
+    expect(input).toHaveValue("What should I open tonight?");
+    expect(input).toHaveFocus();
+    await waitFor(() => expect(screen.getByTestId("path")).not.toHaveTextContent("ask"));
+
+    // The user must press Send; nothing was sent on their behalf.
+    expect(ai.requests).toHaveLength(0);
+
+    ai.queueText("Try the Barolo.");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Try the Barolo.");
+    expect(ai.requests).toHaveLength(1);
+  });
+
+  it("caps a long ?ask= at 500 characters", async () => {
+    await saveApiKey("sk-ant-test");
+    const long = "a".repeat(600);
+
+    renderChat(`/sommelier?ask=${long}`);
+    const input = await screen.findByRole("textbox", { name: /ask the sommelier/i });
+    expect(input).toHaveValue("a".repeat(500));
+  });
+
+  it("keeps ?wine= when clearing ?ask=", async () => {
+    await saveApiKey("sk-ant-test");
+    const { wine } = await seed();
+
+    renderChat(`/sommelier?wine=${wine.id}&ask=${encodeURIComponent("Pair with lamb")}`);
+    const input = await screen.findByRole("textbox", { name: /ask the sommelier/i });
+    expect(input).toHaveValue("Pair with lamb");
+    await waitFor(() =>
+      expect(screen.getByTestId("path").textContent).toBe(`/sommelier?wine=${wine.id}`),
+    );
+  });
+
   it("confirms a proposal card, applies it, and offers Undo", async () => {
     await saveApiKey("sk-ant-test");
     const { lot } = await seed();

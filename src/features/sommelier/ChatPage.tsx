@@ -55,6 +55,35 @@ function useScreenWine() {
   return { wine: wine && !wine.deletedAt ? wine : null };
 }
 
+const ASK_PREFILL_MAX = 500;
+
+/**
+ * The text from `?ask=<text>` (e.g. a shortcut or an external link into the sommelier), trimmed
+ * and capped at 500 characters. Read once on mount, then the param is dropped from the URL (with
+ * `replace`) so going Back never refills it. It only fills the composer; the user still presses
+ * Send.
+ */
+function useAskPrefill(): string {
+  const [params, setParams] = useSearchParams();
+  const [ask] = useState(() => (params.get("ask") ?? "").trim().slice(0, ASK_PREFILL_MAX));
+
+  useEffect(() => {
+    if (!params.has("ask")) return;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("ask");
+        return next;
+      },
+      { replace: true },
+    );
+    // Reads and clears the param once, right after the first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return ask;
+}
+
 function threadPath(threadId: string, wineId: string | null): string {
   const base = `/sommelier/${encodeURIComponent(threadId)}`;
   return wineId ? `${base}?wine=${encodeURIComponent(wineId)}` : base;
@@ -83,6 +112,7 @@ export default function SommelierHome() {
   const status = useAiStatus();
   const { failed } = useCommandFeedback();
   const { wine } = useScreenWine();
+  const askPrefill = useAskPrefill();
 
   const start = async (text: string) => {
     const screen = { wineId: wine?.id ?? null };
@@ -106,7 +136,7 @@ export default function SommelierHome() {
               prompts={wine ? WINE_PROMPTS : SUGGESTED_PROMPTS}
               onPick={(prompt) => void start(prompt)}
             />
-            <Composer busy={false} onSend={start} />
+            <Composer busy={false} onSend={start} initialText={askPrefill} />
           </>
         )}
         <p className="text-sm text-ink-subtle">{PRIVACY_NOTE}</p>
@@ -318,15 +348,25 @@ function Composer({
   busy,
   onSend,
   onStop,
+  initialText = "",
 }: {
   busy: boolean;
   onSend: (text: string) => Promise<void>;
   onStop?: () => void;
+  /** Fills the box on mount and focuses it (from `?ask=`); never sends on its own. */
+  initialText?: string;
 }) {
   const id = useId();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [sending, setSending] = useState(false);
   const canSend = text.trim().length > 0 && !busy && !sending;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (initialText) textareaRef.current?.focus();
+    // Only on mount: a prefilled composer is focused once, not on every re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -353,6 +393,7 @@ function Composer({
       <div className="flex items-end gap-2">
         <textarea
           id={id}
+          ref={textareaRef}
           rows={2}
           value={text}
           onChange={(event) => setText(event.target.value)}

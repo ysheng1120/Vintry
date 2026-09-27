@@ -34,6 +34,7 @@ import {
   type CellarFilters,
 } from "./filters";
 import BulkEstimate, { BulkEstimateButton } from "../wine/BulkEstimate";
+import { PrintableCellarTable, PrintListButton } from "./PrintList";
 import { StatusBadge } from "./StatusBadge";
 
 const STATUS_CHIPS: WindowStatus[] = ["ready", "drink-soon", "hold", "past-peak", "none"];
@@ -105,9 +106,11 @@ export default function CellarPage() {
   const header = (
     <PageHeader
       title="Cellar"
+      className="print:hidden"
       actions={
         <>
           <BulkEstimateButton />
+          {allRows && allRows.length > 0 && <PrintListButton />}
           <Link to="/add" className={buttonClasses({ variant: "primary" })}>
             <Plus aria-hidden="true" className="size-4" />
             Add wine
@@ -180,192 +183,195 @@ export default function CellarPage() {
   return (
     <>
       {header}
-      <BulkEstimate />
+      <div className="print:hidden">
+        <BulkEstimate />
 
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="relative min-w-60 flex-1">
-          <label htmlFor={CELLAR_SEARCH_ID} className="sr-only">
-            Search your cellar
-          </label>
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle"
-          />
-          <input
-            id={CELLAR_SEARCH_ID}
-            type="search"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search producer, wine, region, grape…"
-            aria-keyshortcuts="/"
-            autoComplete="off"
-            className="min-h-11 w-full rounded-xl border border-border-strong bg-surface py-2 pr-3 pl-9 text-[0.95rem] text-ink placeholder:text-ink-subtle hover:border-ink-subtle focus:border-primary focus:outline-2 focus:outline-offset-0 focus:outline-ring/30"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="cellar-sort" className="text-sm font-medium text-ink-muted">
-            Sort
-          </label>
-          <Select
-            id="cellar-sort"
-            value={filters.sort}
-            onChange={(e) => apply({ sort: e.target.value as CellarSort })}
-            className="w-48"
-          >
-            {SORTS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-      </div>
-
-      <div className="mb-3 flex flex-col gap-2">
-        <ChipRow label="Drinking window">
-          {STATUS_CHIPS.map((status) => (
-            <FilterChip
-              key={status}
-              selected={filters.statuses.includes(status)}
-              onToggle={(on) => apply({ statuses: toggle(filters.statuses, status, on) })}
-              count={statusCount(status)}
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <div className="relative min-w-60 flex-1">
+            <label htmlFor={CELLAR_SEARCH_ID} className="sr-only">
+              Search your cellar
+            </label>
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle"
+            />
+            <input
+              id={CELLAR_SEARCH_ID}
+              type="search"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search producer, wine, region, grape…"
+              aria-keyshortcuts="/"
+              autoComplete="off"
+              className="min-h-11 w-full rounded-xl border border-border-strong bg-surface py-2 pr-3 pl-9 text-[0.95rem] text-ink placeholder:text-ink-subtle hover:border-ink-subtle focus:border-primary focus:outline-2 focus:outline-offset-0 focus:outline-ring/30"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="cellar-sort" className="text-sm font-medium text-ink-muted">
+              Sort
+            </label>
+            <Select
+              id="cellar-sort"
+              value={filters.sort}
+              onChange={(e) => apply({ sort: e.target.value as CellarSort })}
+              className="w-48"
             >
-              {WINDOW_STATUS_LABELS[status]}
-            </FilterChip>
-          ))}
-          <FilterChip
-            selected={filters.drunk}
-            onToggle={(on) => apply({ drunk: on })}
-            count={drunkCount}
-          >
-            Drunk
-          </FilterChip>
-        </ChipRow>
-        {colours.length > 1 || filters.colours.length > 0 ? (
-          <ChipRow label="Colour">
-            {colours.map((colour) => (
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+
+        <div className="mb-3 flex flex-col gap-2">
+          <ChipRow label="Drinking window">
+            {STATUS_CHIPS.map((status) => (
               <FilterChip
-                key={colour}
-                selected={filters.colours.includes(colour)}
-                onToggle={(on) => apply({ colours: toggle(filters.colours, colour, on) })}
-                icon={<ColorDot color={colour} decorative />}
-                count={base.filter((r) => r.wine.colour === colour).length}
+                key={status}
+                selected={filters.statuses.includes(status)}
+                onToggle={(on) => apply({ statuses: toggle(filters.statuses, status, on) })}
+                count={statusCount(status)}
               >
-                {COLOUR_LABELS[colour]}
+                {WINDOW_STATUS_LABELS[status]}
               </FilterChip>
             ))}
+            <FilterChip
+              selected={filters.drunk}
+              onToggle={(on) => apply({ drunk: on })}
+              count={drunkCount}
+            >
+              Drunk
+            </FilterChip>
           </ChipRow>
-        ) : null}
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={moreOpen}
-            aria-controls="cellar-more-filters"
-            icon={<SlidersHorizontal aria-hidden="true" className="size-4" />}
-            onClick={() => setMoreOpen((open) => !open)}
-          >
-            {moreOpen ? "Fewer filters" : "Location, country, region"}
-            {moreCount > 0 && <Badge tone="primary">{moreCount}</Badge>}
-          </Button>
-        </div>
-        {moreOpen && (
-          <div id="cellar-more-filters" className="flex flex-col gap-2">
-            <ChipRow label="Location">
-              {(locations ?? []).length === 0 && (
-                <span className="text-sm text-ink-subtle">No locations yet.</span>
-              )}
-              {(locations ?? []).map((loc) => (
+          {colours.length > 1 || filters.colours.length > 0 ? (
+            <ChipRow label="Colour">
+              {colours.map((colour) => (
                 <FilterChip
-                  key={loc.id}
-                  selected={filters.locations.includes(loc.id)}
-                  onToggle={(on) => apply({ locations: toggle(filters.locations, loc.id, on) })}
-                  count={byLocation.get(loc.id) ?? 0}
+                  key={colour}
+                  selected={filters.colours.includes(colour)}
+                  onToggle={(on) => apply({ colours: toggle(filters.colours, colour, on) })}
+                  icon={<ColorDot color={colour} decorative />}
+                  count={base.filter((r) => r.wine.colour === colour).length}
                 >
-                  {loc.name}
+                  {COLOUR_LABELS[colour]}
                 </FilterChip>
               ))}
             </ChipRow>
-            <ChipRow label="Country">
-              {sortedKeys(byCountry).map((country) => (
-                <FilterChip
-                  key={country}
-                  selected={filters.countries.includes(country)}
-                  onToggle={(on) => apply({ countries: toggle(filters.countries, country, on) })}
-                  count={byCountry.get(country)}
-                >
-                  {country}
-                </FilterChip>
-              ))}
-            </ChipRow>
-            <ChipRow label="Region">
-              {sortedKeys(byRegion).map((region) => (
-                <FilterChip
-                  key={region}
-                  selected={filters.regions.includes(region)}
-                  onToggle={(on) => apply({ regions: toggle(filters.regions, region, on) })}
-                  count={byRegion.get(region)}
-                >
-                  {region}
-                </FilterChip>
-              ))}
-            </ChipRow>
+          ) : null}
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={moreOpen}
+              aria-controls="cellar-more-filters"
+              icon={<SlidersHorizontal aria-hidden="true" className="size-4" />}
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              {moreOpen ? "Fewer filters" : "Location, country, region"}
+              {moreCount > 0 && <Badge tone="primary">{moreCount}</Badge>}
+            </Button>
           </div>
-        )}
-      </div>
+          {moreOpen && (
+            <div id="cellar-more-filters" className="flex flex-col gap-2">
+              <ChipRow label="Location">
+                {(locations ?? []).length === 0 && (
+                  <span className="text-sm text-ink-subtle">No locations yet.</span>
+                )}
+                {(locations ?? []).map((loc) => (
+                  <FilterChip
+                    key={loc.id}
+                    selected={filters.locations.includes(loc.id)}
+                    onToggle={(on) => apply({ locations: toggle(filters.locations, loc.id, on) })}
+                    count={byLocation.get(loc.id) ?? 0}
+                  >
+                    {loc.name}
+                  </FilterChip>
+                ))}
+              </ChipRow>
+              <ChipRow label="Country">
+                {sortedKeys(byCountry).map((country) => (
+                  <FilterChip
+                    key={country}
+                    selected={filters.countries.includes(country)}
+                    onToggle={(on) => apply({ countries: toggle(filters.countries, country, on) })}
+                    count={byCountry.get(country)}
+                  >
+                    {country}
+                  </FilterChip>
+                ))}
+              </ChipRow>
+              <ChipRow label="Region">
+                {sortedKeys(byRegion).map((region) => (
+                  <FilterChip
+                    key={region}
+                    selected={filters.regions.includes(region)}
+                    onToggle={(on) => apply({ regions: toggle(filters.regions, region, on) })}
+                    count={byRegion.get(region)}
+                  >
+                    {region}
+                  </FilterChip>
+                ))}
+              </ChipRow>
+            </div>
+          )}
+        </div>
 
-      <div className="mb-3 flex min-h-10 flex-wrap items-center justify-between gap-2">
-        <p role="status" className="text-sm text-ink-muted">
-          <span className="font-medium text-ink">{summary}</span>
-          {!filters.drunk && ` · ${bottles(bottleTotal)}`}
-        </p>
-        {filtered && (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<X aria-hidden="true" className="size-4" />}
-            onClick={clearAll}
-          >
-            Clear filters
-          </Button>
-        )}
-      </div>
+        <div className="mb-3 flex min-h-10 flex-wrap items-center justify-between gap-2">
+          <p role="status" className="text-sm text-ink-muted">
+            <span className="font-medium text-ink">{summary}</span>
+            {!filters.drunk && ` · ${bottles(bottleTotal)}`}
+          </p>
+          {filtered && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<X aria-hidden="true" className="size-4" />}
+              onClick={clearAll}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
 
-      {visible.length === 0 ? (
-        filtered ? (
-          <EmptyState
-            icon={<Search />}
-            title="No wines match"
-            description="Try another word, or clear the filters to see everything."
-            action={<Button onClick={clearAll}>Clear filters</Button>}
-          />
-        ) : filters.drunk ? (
-          <EmptyState
-            icon={<Wine />}
-            title="Nothing drunk yet"
-            description="When you drink the last bottle of a wine, it moves here with its notes."
-          />
+        {visible.length === 0 ? (
+          filtered ? (
+            <EmptyState
+              icon={<Search />}
+              title="No wines match"
+              description="Try another word, or clear the filters to see everything."
+              action={<Button onClick={clearAll}>Clear filters</Button>}
+            />
+          ) : filters.drunk ? (
+            <EmptyState
+              icon={<Wine />}
+              title="Nothing drunk yet"
+              description="When you drink the last bottle of a wine, it moves here with its notes."
+            />
+          ) : (
+            <EmptyState
+              icon={<Wine />}
+              title="No bottles left"
+              description="Every wine here has been drunk. You'll find them under Drunk."
+              action={
+                <Link to="/add" className={buttonClasses({ variant: "primary" })}>
+                  Add a wine
+                </Link>
+              }
+            />
+          )
         ) : (
-          <EmptyState
-            icon={<Wine />}
-            title="No bottles left"
-            description="Every wine here has been drunk. You'll find them under Drunk."
-            action={
-              <Link to="/add" className={buttonClasses({ variant: "primary" })}>
-                Add a wine
-              </Link>
-            }
-          />
-        )
-      ) : (
-        <ul aria-label="Wines" className="flex flex-col gap-2">
-          {visible.map((row) => (
-            <li key={row.wine.id}>
-              <CellarRowLink row={row} />
-            </li>
-          ))}
-        </ul>
-      )}
+          <ul aria-label="Wines" className="flex flex-col gap-2">
+            {visible.map((row) => (
+              <li key={row.wine.id}>
+                <CellarRowLink row={row} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <PrintableCellarTable rows={visible} />
     </>
   );
 }
