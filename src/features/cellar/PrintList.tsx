@@ -2,7 +2,7 @@ import { Printer } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import type { CellarRow } from "../../domain/selectors";
 import { COLOUR_LABELS } from "../../domain/types";
-import { printListTitle, windowRangeLabel } from "./printList";
+import { printListTitle, windowRangeLabel } from "./printText";
 
 /** Opens the browser print dialog for the current filtered list (R-print). */
 export function PrintListButton() {
