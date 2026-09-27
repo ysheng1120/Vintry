@@ -13,7 +13,7 @@ export interface CellarFilters {
   locations: string[];
   countries: string[];
   regions: string[];
-  /** Show only wines with no bottles left (R3). */
+  /** Show only wines with a bottle drunk, even with bottles left, or with none left (R3). */
   drunk: boolean;
   sort: CellarSort;
 }
@@ -23,6 +23,9 @@ export const SORTS: { value: CellarSort; label: string }[] = [
   { value: "vintage", label: "Vintage, oldest first" },
   { value: "window", label: "Drink first" },
   { value: "recent", label: "Recently added" },
+  { value: "bottles", label: "Most bottles" },
+  { value: "cost", label: "Cost per bottle, highest first" },
+  { value: "value", label: "Your value, highest first" },
 ];
 
 const isOneOf =

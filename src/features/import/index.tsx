@@ -37,6 +37,24 @@ function describeWineForRow(draft: NonNullable<ImportPreview["rows"][number]["dr
   return [draft.producer, draft.name, year].filter(Boolean).join(" ");
 }
 
+/** The new locations that the given rows put bottles in: rows left out create none. */
+function newLocationsUsedBy(
+  rows: ImportPreview["rows"],
+  newLocations: ImportPreview["newLocations"],
+): ImportPreview["newLocations"] {
+  const used = new Set(rows.flatMap((row) => row.draft?.lots?.map((lot) => lot.locationId) ?? []));
+  return newLocations.filter((location) => used.has(location.id));
+}
+
+function locationLabel(
+  draft: NonNullable<ImportPreview["rows"][number]["draft"]>,
+  names: Map<string, string>,
+): string {
+  const lot = draft.lots?.[0];
+  const name = lot?.locationId ? (names.get(lot.locationId) ?? "Unknown location") : "No location";
+  return lot?.bin ? `${name} · ${lot.bin}` : name;
+}
+
 /** CSV import: pick a file, map its columns, set defaults, preview, then import (R20). */
 export default function ImportPage() {
   const { done, failed } = useCommandFeedback();
@@ -69,10 +87,15 @@ export default function ImportPage() {
   // "Looks already imported" only when every row that would otherwise be added is a duplicate.
   const allRowsDuplicate =
     !!preview && preview.drafts.length > 0 && duplicateCount === preview.drafts.length;
-  const willImportCount = preview
+  const locationNames = new Map([
+    ...(locations ?? []).map((l) => [l.id, l.name] as const),
+    ...(preview?.newLocations ?? []).map((l) => [l.id, l.name] as const),
+  ]);
+  const rowsToImport = preview
     ? preview.rows.filter((row) => shouldImportRow(row, duplicateRowIndexes, includedDuplicates))
-        .length
-    : 0;
+    : [];
+  const willImportCount = rowsToImport.length;
+  const locationsToCreate = newLocationsUsedBy(rowsToImport, preview?.newLocations ?? []);
 
   async function handleFile(file: File) {
     setFileError(null);
@@ -204,7 +227,10 @@ export default function ImportPage() {
         setImportError("Nothing to import: every row already looks like it's in your cellar.");
         return;
       }
-      const result = await importRows({ rows: keptRows.map((row) => row.draft!) });
+      const result = await importRows({
+        rows: keptRows.map((row) => row.draft!),
+        newLocations: newLocationsUsedBy(keptRows, finalPreview.newLocations),
+      });
       const leftOut = [...duplicateRowIndexes].filter((i) => !includedDuplicates.has(i)).length;
       setSummary(result.summary);
       setStep("done");
@@ -382,6 +408,16 @@ export default function ImportPage() {
               </p>
             </div>
           )}
+          {locationsToCreate.length > 0 && (
+            <div className="space-y-1 rounded-xl border border-border bg-surface-muted/60 p-4 text-sm text-ink">
+              <p className="font-medium">
+                {locationsToCreate.length === 1
+                  ? "1 new location will be created:"
+                  : `${locationsToCreate.length} new locations will be created:`}
+              </p>
+              <p className="text-ink-muted">{locationsToCreate.map((l) => l.name).join(", ")}</p>
+            </div>
+          )}
           <p className="text-lg font-medium text-ink">
             {willImportCount} {willImportCount === 1 ? "wine" : "wines"} will be imported
             {preview.skippedCount > 0 &&
@@ -395,6 +431,7 @@ export default function ImportPage() {
                   <th className="px-3 py-2 font-medium">Row</th>
                   <th className="px-3 py-2 font-medium">Wine</th>
                   <th className="px-3 py-2 font-medium">Qty</th>
+                  <th className="px-3 py-2 font-medium">Location</th>
                   <th className="px-3 py-2 font-medium">Notes</th>
                   <th className="px-3 py-2 font-medium">Include anyway</th>
                 </tr>
@@ -424,6 +461,9 @@ export default function ImportPage() {
                       </td>
                       <td className="px-3 py-2 tabular-nums">
                         {row.draft?.lots?.[0]?.quantity ?? "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.draft ? locationLabel(row.draft, locationNames) : "—"}
                       </td>
                       <td className="px-3 py-2">
                         {row.issues.map((issue) => (

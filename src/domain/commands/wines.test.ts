@@ -163,6 +163,43 @@ describe("importRows", () => {
     expect(performance.now() - started).toBeLessThan(5000);
     expect(await db.wines.count()).toBe(300);
   });
+
+  it("creates the file's new locations in the same batch, and one undo removes them", async () => {
+    await db.locations.add({
+      id: "kitchen",
+      name: "Kitchen rack",
+      notes: null,
+      isSample: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const result = await importRows({
+      rows: [
+        { ...monteBello, lots: [{ quantity: 6, locationId: "tmp-rack-1" }] },
+        {
+          producer: "Krug",
+          vintage: null,
+          colour: "sparkling",
+          lots: [{ quantity: 2, locationId: "tmp-kitchen" }],
+        },
+      ],
+      newLocations: [
+        { id: "tmp-rack-1", name: " Rack  1 " },
+        // Already exists under another spelling, so the lot goes to the existing location.
+        { id: "tmp-kitchen", name: "KITCHEN RACK" },
+      ],
+    });
+    expect(result.summary).toBe("Imported 2 wines (8 bottles) and created 1 location");
+    const locations = await db.locations.toArray();
+    expect(locations.map((l) => l.name).sort()).toEqual(["Kitchen rack", "Rack 1"]);
+    const lots = await db.lots.toArray();
+    expect(lots.map((l) => l.locationId).sort()).toEqual(["kitchen", "tmp-rack-1"]);
+    expect(await db.eventBatches.count()).toBe(1);
+
+    await undoBatch(result.batchId!);
+    expect(await db.lots.count()).toBe(0);
+    expect((await db.locations.toArray()).map((l) => l.name)).toEqual(["Kitchen rack"]);
+  });
 });
 
 describe("updateWine", () => {

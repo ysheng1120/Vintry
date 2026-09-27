@@ -57,9 +57,28 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
-        text: "Vintry keeps the record. A wine with no bottles left stays under the Drunk filter in Cellar.",
+        text: "Vintry keeps the record. Once you drink a bottle, the wine shows under the Drunk filter in Cellar, with how many you drank and how many are left. A wine with no bottles left stays there too.",
       },
     ],
+  },
+  {
+    id: "find",
+    title: "Find and sort your wines",
+    blocks: [
+      {
+        kind: "text",
+        text: "In Cellar, search by producer, wine, region, or grape. Filter by drinking window, colour, location, country, or region.",
+      },
+      {
+        kind: "text",
+        text: "Sort by name, vintage, drink first, recently added, most bottles, cost per bottle, or your own value. Vintry never converts currencies, so wines in the currency you use most come first, then each other currency.",
+      },
+      {
+        kind: "text",
+        text: "Home shows up to 6 wines in each section. Click Show all to see the rest.",
+      },
+    ],
+    links: [{ to: "/cellar", label: "Cellar" }],
   },
   {
     id: "move",
@@ -155,6 +174,10 @@ export const HELP_SECTIONS: HelpSection[] = [
           "In Vintry, click Add wine → Import a file, and choose the file.",
           "Check the preview. Nothing is saved until you click Import.",
         ],
+      },
+      {
+        kind: "text",
+        text: "If the file has a location column, the bottles go to those locations. Vintry creates any location it does not have yet, and the preview lists them first.",
       },
       {
         kind: "text",

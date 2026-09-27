@@ -4,7 +4,7 @@ import { newId } from "../../lib/id";
 import { nowIso } from "../clock";
 import type { ChangeSet } from "../events";
 import { bottles, wineLabel } from "../labels";
-import { isMatchCandidate, wineKey } from "../match";
+import { isMatchCandidate, normalizeName, wineKey } from "../match";
 import { LotSchema, WineSchema, type EventSource, type Wine, type WindowSource } from "../types";
 import {
   cleanPatch,
@@ -14,12 +14,7 @@ import {
   notFound,
   type CommandContext,
 } from "./core";
-import {
-  WineDraftSchema,
-  WineFieldsSchema,
-  WineValueFieldsSchema,
-  type WineDraft,
-} from "./schemas";
+import { WineDraftSchema, WineFieldsSchema, WineValueFieldsSchema } from "./schemas";
 import { pluralize } from "../../lib/format";
 
 type ParsedDraft = z.output<typeof WineDraftSchema>;
@@ -157,15 +152,64 @@ export const addBottlesCommand = defineCommand({
   },
 });
 
+const ImportRowsInput = z.object({
+  rows: z.array(WineDraftSchema).min(1),
+  /**
+   * Locations named in the file that Vintry does not have yet, with the ids the rows' lots use
+   * for them. They are created in the same undoable change as the bottles.
+   */
+  newLocations: z
+    .array(z.object({ id: z.string().min(1), name: z.string() }))
+    .optional()
+    .default([]),
+});
+
 export const importRowsCommand = defineCommand({
   name: "importRows",
   description: "Bulk add rows from a CSV import in one undoable change.",
-  input: z.object({ rows: z.array(WineDraftSchema).min(1) }),
+  input: ImportRowsInput,
   defaultSource: "import",
   async execute(input, changes, { source }) {
-    const outcome = await addDrafts(changes, input.rows, source);
+    // A name that already exists (for example after a retry) reuses that location instead.
+    const existing = new Map(
+      (await db.locations.toArray()).map((l) => [normalizeName(l.name), l.id]),
+    );
+    const idFor = new Map<string, string>();
+    for (const location of input.newLocations) {
+      const name = location.name.trim().replace(/\s+/g, " ");
+      if (!name) throw new CommandError("A location needs a name.", "invalid-input");
+      const key = normalizeName(name);
+      const known = existing.get(key);
+      if (known) {
+        idFor.set(location.id, known);
+        continue;
+      }
+      const t = nowIso();
+      await changes.insert("locations", {
+        id: location.id,
+        createdAt: t,
+        updatedAt: t,
+        name,
+        notes: null,
+        isSample: false,
+      });
+      existing.set(key, location.id);
+      idFor.set(location.id, location.id);
+    }
+    const rows = input.rows.map((row) => ({
+      ...row,
+      lots: row.lots.map((lot) =>
+        lot.locationId && idFor.has(lot.locationId)
+          ? { ...lot, locationId: idFor.get(lot.locationId)! }
+          : lot,
+      ),
+    }));
+    const outcome = await addDrafts(changes, rows, source);
+    const created = [...idFor.entries()].filter(([from, to]) => from === to).length;
     return {
-      summary: `Imported ${pluralize(outcome.wines.length, "wine")} (${bottles(outcome.bottleCount)})`,
+      summary:
+        `Imported ${pluralize(outcome.wines.length, "wine")} (${bottles(outcome.bottleCount)})` +
+        (created > 0 ? ` and created ${pluralize(created, "location")}` : ""),
     };
   },
 });
@@ -286,7 +330,7 @@ export const purgeDeletedCommand = defineCommand({
 
 export const addBottles = (input: z.input<typeof AddBottlesInput>, ctx?: CommandContext) =>
   addBottlesCommand.run(input, ctx);
-export const importRows = (input: { rows: WineDraft[] }, ctx?: CommandContext) =>
+export const importRows = (input: z.input<typeof ImportRowsInput>, ctx?: CommandContext) =>
   importRowsCommand.run(input, ctx);
 export const updateWine = (input: z.input<typeof updateWineCommand.input>, ctx?: CommandContext) =>
   updateWineCommand.run(input, ctx);

@@ -39,6 +39,9 @@ test("import a CellarTracker file, back it up, erase everything, and restore", a
   await page.getByRole("button", { name: "Preview import" }).click();
   await expect(page.getByText(/3 wines will be imported/)).toBeVisible();
   await expect(page.getByRole("table")).toContainText("Château Margaux");
+  // The file's Location column becomes real locations, listed before the import.
+  await expect(page.getByText("2 new locations will be created:")).toBeVisible();
+  await expect(page.getByText("Cellar, Kitchen Rack")).toBeVisible();
   await page.getByRole("button", { name: "Import 3 wines" }).click();
   await page.getByRole("link", { name: "Go to cellar" }).click();
 
@@ -47,6 +50,9 @@ test("import a CellarTracker file, back it up, erase everything, and restore", a
   await expect(cellarRows(page)).toHaveCount(3);
   await expect(cellarRows(page).filter({ hasText: "Château Margaux" })).toHaveCount(1);
   await expect(cellarRows(page).filter({ hasText: "Domaine de la Côte-Rôtie" })).toHaveCount(1);
+  await expect(cellarRows(page).filter({ hasText: "Domaine de la Côte-Rôtie" })).toContainText(
+    "Kitchen Rack",
+  );
   const before = (await cellarSummary(page).textContent())?.trim();
   expect(before).toMatch(/^3 wines · 6 bottles$/);
 

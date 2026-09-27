@@ -1,4 +1,5 @@
 import { Compass, House, KeyRound, MessageCircle, Sparkles } from "lucide-react";
+import { useId, useState } from "react";
 import { Link } from "react-router";
 import { useAiStatus } from "../../ai/useAiStatus";
 import { Badge } from "../../components/ui/Badge";
@@ -18,18 +19,48 @@ import { greetingFor } from "./greeting";
 import { LastBottlesSection } from "./LastBottlesSection";
 import { WineCard } from "./WineCard";
 
-function Section({ title, rows }: { title: string; rows: CellarRow[] }) {
+/**
+ * Wines a drinking-status section shows before "Show all": two rows of three on a wide screen.
+ * A large cellar can have hundreds of wines ready at once, and Home must stay short.
+ */
+const HOME_SECTION_LIMIT = 6;
+
+function Section({
+  title,
+  rows,
+  limit = HOME_SECTION_LIMIT,
+}: {
+  title: string;
+  rows: CellarRow[];
+  limit?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   if (rows.length === 0) return null;
+  const hidden = rows.length - limit;
+  const shown = expanded || hidden <= 0 ? rows : rows.slice(0, limit);
   return (
     <section className="mb-10">
       <h2 className="mb-3 text-lg font-semibold text-ink">{title}</h2>
-      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((row) => (
+      <ul id={listId} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {shown.map((row) => (
           <li key={row.wine.id}>
             <WineCard row={row} />
           </li>
         ))}
       </ul>
+      {hidden > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-3"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {expanded ? "Show fewer" : `Show all ${rows.length}`}
+        </Button>
+      )}
     </section>
   );
 }
@@ -234,7 +265,7 @@ export default function HomePage() {
       <LastBottlesSection />
       <Section title="Coming into window" rows={home.comingIntoWindow} />
       <NoWindowSection count={home.counts.byStatus.none} />
-      <Section title="Recently added" rows={home.recentlyAdded} />
+      <Section title="Recently added" rows={home.recentlyAdded} limit={Infinity} />
       <MoneySections home={home} />
     </>
   );

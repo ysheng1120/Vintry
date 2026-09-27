@@ -48,17 +48,25 @@ describe("import fixtures", () => {
       country: "France",
     });
 
-    const result = await importRows({ rows: preview.drafts });
+    const result = await importRows({
+      rows: preview.drafts,
+      newLocations: preview.newLocations,
+    });
     const wines = await db.wines.toArray();
     expect(wines.map((w) => w.producer).sort()).toEqual(
       ["Château Margaux", "Domaine Leflaive", "Domaine de la Côte-Rôtie"].sort(),
     );
     expect(wines.find((w) => w.producer === "Château Margaux")).toMatchObject({ vintage: 2015 });
+    // The file's Location column becomes real locations, not "No location".
+    const locations = await db.locations.toArray();
+    expect(locations.map((l) => l.name).sort()).toEqual(["Cellar", "Kitchen Rack"]);
+    expect((await db.lots.toArray()).every((l) => l.locationId !== null)).toBe(true);
 
     const undone = await undoBatch(result.batchId!);
     expect(undone.ok).toBe(true);
     expect(await db.wines.count()).toBe(0);
     expect(await db.lots.count()).toBe(0);
+    expect(await db.locations.count()).toBe(0);
   });
 
   it("maps the Vivino fixture with the built-in preset, needing no AI", async () => {
@@ -83,7 +91,7 @@ describe("import fixtures", () => {
     expect(montebello?.rating).toBe(90);
     expect(montebello?.lots?.[0]).toMatchObject({ quantity: 1, currency: "USD" });
 
-    await importRows({ rows: preview.drafts });
+    await importRows({ rows: preview.drafts, newLocations: preview.newLocations });
     expect(await db.wines.count()).toBe(2);
   });
 

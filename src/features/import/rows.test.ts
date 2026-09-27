@@ -170,15 +170,48 @@ describe("buildImportRows", () => {
     expect(preview.drafts[0]?.lots?.[0]?.locationId).toBe("kitchen-id");
   });
 
-  it("falls back to the default location when the CSV name doesn't match", () => {
-    const preview = buildImportRows([row({ Location: "Unknown place" })], {
+  it("plans a new location, once, for a CSV name that doesn't match", () => {
+    let next = 0;
+    const preview = buildImportRows(
+      [
+        row({ Location: "Rack  A", Bin: "3" }),
+        row({ Location: "rack a" }),
+        row({ Location: "Rack B" }),
+        row({ Location: "Kitchen rack" }),
+        row({ Location: "" }),
+      ],
+      {
+        source: "cellartracker",
+        mapping: BASE_MAPPING,
+        defaultLocationId: "default-loc",
+        defaultCurrency: null,
+        locations: [{ id: "kitchen-id", name: "Kitchen rack" }],
+        makeId: () => `new-${++next}`,
+      },
+    );
+    expect(preview.newLocations).toEqual([
+      { id: "new-1", name: "Rack A" },
+      { id: "new-2", name: "Rack B" },
+    ]);
+    expect(preview.drafts.map((d) => d.lots?.[0]?.locationId)).toEqual([
+      "new-1",
+      "new-1",
+      "new-2",
+      "kitchen-id",
+      "default-loc",
+    ]);
+    expect(preview.drafts[0]?.lots?.[0]?.bin).toBe("3");
+  });
+
+  it("plans no new locations when every name matches or is blank", () => {
+    const preview = buildImportRows([row({ Location: "kitchen rack" }), row()], {
       source: "cellartracker",
       mapping: BASE_MAPPING,
-      defaultLocationId: "default-loc",
+      defaultLocationId: null,
       defaultCurrency: null,
       locations: [{ id: "kitchen-id", name: "Kitchen rack" }],
     });
-    expect(preview.drafts[0]?.lots?.[0]?.locationId).toBe("default-loc");
+    expect(preview.newLocations).toEqual([]);
   });
 
   it("clears an out-of-range vintage with a warning instead of failing the row", () => {

@@ -3,6 +3,7 @@ import type { WineDraft } from "../../domain/commands/schemas";
 import { normalizeName } from "../../domain/match";
 import { parseLocaleNumber } from "../../lib/csv";
 import { toIsoDate } from "../../lib/format";
+import { newId } from "../../lib/id";
 import {
   normalizeColour,
   normalizeVintage,
@@ -36,8 +37,13 @@ export interface ImportRow {
 export interface ImportPreview {
   /** One entry per CSV data row, in file order. */
   rows: ImportRow[];
-  /** Ready for `importRows({ rows: drafts })`. */
+  /** Ready for `importRows({ rows: drafts, newLocations })`. */
   drafts: WineDraft[];
+  /**
+   * Locations the file names that Vintry does not have yet, in file order. Lots point at them by
+   * `id`; `importRows` creates them with the bottles.
+   */
+  newLocations: { id: string; name: string }[];
   includedCount: number;
   skippedCount: number;
   bottleCount: number;
@@ -46,12 +52,17 @@ export interface ImportPreview {
 export interface BuildImportRowsOptions {
   source: ImportSourceId;
   mapping: CsvMapping;
-  /** Used for a row whose Location cell doesn't match an existing location, or has none. */
+  /** Used for a row with no Location cell of its own. */
   defaultLocationId: string | null;
   /** Used when a row's Currency cell is blank or unreadable. */
   defaultCurrency: string | null;
-  /** Existing locations, matched to a row's Location cell by name (case- and accent-insensitive). */
+  /**
+   * Existing locations, matched to a row's Location cell by name (case- and accent-insensitive).
+   * A name with no match becomes a new location, so the file's racks are never lost.
+   */
   locations?: { id: string; name: string }[];
+  /** Makes ids for new locations; tests pass a fixed one. */
+  makeId?: () => string;
 }
 
 function cell(row: Record<string, string>, mapping: CsvMapping, field: ImportField): string {
@@ -79,6 +90,18 @@ export function buildImportRows(
   const locationByName = new Map(
     (options.locations ?? []).map((location) => [normalizeName(location.name), location.id]),
   );
+  const makeId = options.makeId ?? newId;
+  const newLocations: { id: string; name: string }[] = [];
+  /** The location id for a Location cell: an existing one, else a new one named after the cell. */
+  const locationIdFor = (raw: string): string => {
+    const key = normalizeName(raw);
+    const known = locationByName.get(key);
+    if (known) return known;
+    const created = { id: makeId(), name: raw.replace(/\s+/g, " ") };
+    newLocations.push(created);
+    locationByName.set(key, created.id);
+    return created.id;
+  };
 
   const result: ImportRow[] = [];
   const drafts: WineDraft[] = [];
@@ -187,10 +210,7 @@ export function buildImportRows(
     }
 
     const locationRaw = cell(row, options.mapping, "location");
-    const matchedLocationId = locationRaw
-      ? locationByName.get(normalizeName(locationRaw))
-      : undefined;
-    const locationId = matchedLocationId ?? options.defaultLocationId;
+    const locationId = locationRaw ? locationIdFor(locationRaw) : options.defaultLocationId;
 
     const bin = cell(row, options.mapping, "bin") || null;
     const store = cell(row, options.mapping, "store") || null;
@@ -243,6 +263,7 @@ export function buildImportRows(
   return {
     rows: result,
     drafts,
+    newLocations,
     includedCount: drafts.length,
     skippedCount: result.length - drafts.length,
     bottleCount,

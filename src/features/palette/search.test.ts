@@ -12,6 +12,8 @@ function row(overrides: Parameters<typeof makeWine>[0], bottles = 6): CellarRow 
     locationIds: [],
     locationNames: [],
     lastAddedAt: "2026-01-01T00:00:00.000Z",
+    drunkBottles: 0,
+    costPerBottle: null,
   };
 }
 

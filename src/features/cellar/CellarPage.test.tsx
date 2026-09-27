@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeLocation, makeLot, makeWine, resetDatabase } from "../../db/testing";
 import { currentYear } from "../../domain/clock";
+import { consumeBottles } from "../../domain/commands";
 import { renderCellarApp } from "./testing";
 
 beforeEach(resetDatabase);
@@ -49,6 +50,23 @@ async function seed() {
 const rows = () => within(screen.getByRole("list", { name: "Wines" })).getAllByRole("link");
 
 describe("Cellar list", () => {
+  it("lists a part-drunk wine under Drunk with bottles drunk and bottles left", async () => {
+    await seed();
+    const ridge = (await db.wines.where("producer").equals("Ridge").first())!;
+    const lot = (await db.lots.where("wineId").equals(ridge.id).first())!;
+    await db.lots.update(lot.id, { quantity: 6 });
+    await consumeBottles({ lotId: lot.id, quantity: 2 });
+
+    const { user } = renderCellarApp("/cellar");
+    await screen.findByRole("link", { name: /Monte Bello/ });
+    await user.click(screen.getByRole("button", { name: /Drunk/ }));
+
+    const drunkRows = await screen.findAllByRole("link", { name: /Monte Bello/ });
+    expect(rows()).toHaveLength(1);
+    expect(drunkRows[0]).toHaveTextContent("2 drunk");
+    expect(drunkRows[0]).toHaveTextContent("4 left");
+  });
+
   it("searches by name and restores the full list when cleared", async () => {
     await seed();
     const { user } = renderCellarApp("/cellar");

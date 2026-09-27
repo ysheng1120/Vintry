@@ -201,6 +201,36 @@ describe("cellar list", () => {
     expect(all).not.toContain("Unknown Estate");
   });
 
+  it("shows a wine under Drunk once a bottle is drunk, even with bottles left", async () => {
+    await addBottles({
+      drafts: [
+        {
+          producer: "Ridge",
+          name: "Monte Bello",
+          vintage: 2019,
+          colour: "red",
+          lots: [{ quantity: 6 }],
+        },
+        { producer: "Krug", vintage: null, colour: "sparkling", lots: [{ quantity: 1 }] },
+        { producer: "Latour", vintage: 2010, colour: "red", lots: [{ quantity: 3 }] },
+      ],
+    });
+    const lotOf = async (producer: string) => {
+      const wine = (await db.wines.where("producer").equals(producer).first())!;
+      return (await db.lots.where("wineId").equals(wine.id).first())!;
+    };
+    await consumeBottles({ lotId: (await lotOf("Ridge")).id, quantity: 2 });
+    await consumeBottles({ lotId: (await lotOf("Krug")).id });
+
+    const drunk = await getCellarList({ drunkOnly: true, sort: "name" }, YEAR);
+    expect(drunk.map((r) => [r.wine.producer, r.drunkBottles, r.bottles])).toEqual([
+      ["Krug", 1, 0],
+      ["Ridge", 2, 4],
+    ]);
+    // The part-drunk wine is still in the cellar list too.
+    expect(producers(await getCellarList({ sort: "name" }, YEAR))).toEqual(["Latour", "Ridge"]);
+  });
+
   it("offers the countries and regions in use for filters", async () => {
     await seed();
     const options = await getFilterOptions();
@@ -449,5 +479,79 @@ describe("history, recently deleted, locations and wishlist", () => {
     setClock("2026-09-02T09:00:00Z");
     await addWishlistItem({ producer: "Salon" });
     expect((await getWishlist()).map((i) => i.producer)).toEqual(["Salon", "Krug"]);
+  });
+});
+
+describe("cellar sorts by bottles, cost and value", () => {
+  beforeEach(resetDatabase);
+
+  async function seedPrices() {
+    await addBottles({
+      drafts: [
+        {
+          producer: "Ridge",
+          vintage: 2019,
+          colour: "red",
+          lots: [
+            { quantity: 2, pricePerBottle: 100, currency: "GBP" },
+            { quantity: 2, pricePerBottle: 200, currency: "GBP" },
+          ],
+        },
+        {
+          producer: "Latour",
+          vintage: 2010,
+          colour: "red",
+          lots: [{ quantity: 1, pricePerBottle: 600, currency: "GBP" }],
+        },
+        {
+          producer: "Opus One",
+          vintage: 2018,
+          colour: "red",
+          lots: [{ quantity: 12, pricePerBottle: 900, currency: "USD" }],
+        },
+        { producer: "Unpriced", vintage: 2020, colour: "white", lots: [{ quantity: 3 }] },
+      ],
+    });
+  }
+
+  it("sorts by most bottles first", async () => {
+    await seedPrices();
+    expect(producers(await getCellarList({ sort: "bottles" }, YEAR))).toEqual([
+      "Opus One",
+      "Ridge",
+      "Unpriced",
+      "Latour",
+    ]);
+  });
+
+  it("sorts by cost per bottle, highest first, never mixing currencies", async () => {
+    await seedPrices();
+    const rows = await getCellarList({ sort: "cost" }, YEAR);
+    // GBP is used by more wines, so its wines come first; USD after; unpriced last.
+    expect(producers(rows)).toEqual(["Latour", "Ridge", "Opus One", "Unpriced"]);
+    expect(rows.find((r) => r.wine.producer === "Ridge")?.costPerBottle).toEqual({
+      amount: 150,
+      currency: "GBP",
+    });
+  });
+
+  it("sorts by the collector's own value, highest first, wines without one last", async () => {
+    await seedPrices();
+    const idOf = async (producer: string) =>
+      (await db.wines.where("producer").equals(producer).first())!.id;
+    await updateWine({
+      wineId: await idOf("Ridge"),
+      patch: { valuePerBottle: 400, valueCurrency: "GBP" },
+    });
+    await updateWine({
+      wineId: await idOf("Unpriced"),
+      patch: { valuePerBottle: 900, valueCurrency: "GBP" },
+    });
+    expect(producers(await getCellarList({ sort: "value" }, YEAR))).toEqual([
+      "Unpriced",
+      "Ridge",
+      "Latour",
+      "Opus One",
+    ]);
   });
 });

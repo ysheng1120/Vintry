@@ -92,7 +92,7 @@ export default function CellarPage() {
     // Rows in this view (in the cellar, or drunk) before other filters: the chip counts.
     const base = filterCellarRows(allRows, { drunkOnly: current.drunk });
     const visible = filterCellarRows(allRows, toCellarQuery(current));
-    const drunkCount = allRows.filter((r) => r.bottles === 0).length;
+    const drunkCount = filterCellarRows(allRows, { drunkOnly: true }).length;
     return { base, visible, drunkCount };
     // `filters` is derived from `params`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,6 +182,7 @@ export default function CellarPage() {
     ? `${visible.length} of ${pluralize(base.length, noun)}`
     : pluralize(base.length, noun);
   const bottleTotal = visible.reduce((sum, r) => sum + r.bottles, 0);
+  const drunkTotal = visible.reduce((sum, r) => sum + r.drunkBottles, 0);
 
   const statusCount = (status: WindowStatus) =>
     base.filter((r) => r.status === status || (status === "ready" && r.status === "drink-soon"))
@@ -233,7 +234,7 @@ export default function CellarPage() {
               id="cellar-sort"
               value={filters.sort}
               onChange={(e) => apply({ sort: e.target.value as CellarSort })}
-              className="w-48"
+              className="w-64"
             >
               {SORTS.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -340,7 +341,9 @@ export default function CellarPage() {
         <div className="mb-3 flex min-h-10 flex-wrap items-center justify-between gap-2">
           <p role="status" className="text-sm text-ink-muted">
             <span className="font-medium text-ink">{summary}</span>
-            {!filters.drunk && ` · ${bottles(bottleTotal)}`}
+            {filters.drunk
+              ? drunkTotal > 0 && ` · ${bottles(drunkTotal)} drunk`
+              : ` · ${bottles(bottleTotal)}`}
           </p>
           {filtered && (
             <Button
@@ -366,7 +369,7 @@ export default function CellarPage() {
             <EmptyState
               icon={<Wine />}
               title="Nothing drunk yet"
-              description="When you drink the last bottle of a wine, it moves here with its notes."
+              description="When you drink a bottle, its wine shows here with its notes, even with bottles left."
             />
           ) : (
             <EmptyState
@@ -385,7 +388,7 @@ export default function CellarPage() {
             <ul id="cellar-wine-list" aria-label="Wines" className="flex flex-col gap-2">
               {visible.slice(0, rowsShown).map((row) => (
                 <li key={row.wine.id}>
-                  <CellarRowLink row={row} />
+                  <CellarRowLink row={row} drunkView={filters.drunk} />
                 </li>
               ))}
             </ul>
@@ -416,7 +419,7 @@ function ChipRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function CellarRowLink({ row }: { row: CellarRow }) {
+function CellarRowLink({ row, drunkView }: { row: CellarRow; drunkView: boolean }) {
   const { wine } = row;
   const place = [wine.region, wine.country].filter(Boolean).join(", ");
   const meta = [place, row.locationNames.join(", ")].filter(Boolean).join(" · ");
@@ -445,10 +448,22 @@ function CellarRowLink({ row }: { row: CellarRow }) {
       <span className="w-12 shrink-0 text-right font-display text-lg text-ink tabular-nums">
         {wine.vintage ?? "NV"}
       </span>
-      <span className="w-20 shrink-0 text-right tabular-nums">
-        <span className="font-semibold text-ink">{row.bottles}</span>{" "}
-        <span className="text-sm text-ink-muted">{row.bottles === 1 ? "bottle" : "bottles"}</span>
-      </span>
+      {drunkView ? (
+        <span className="w-20 shrink-0 text-right tabular-nums">
+          <span className="block">
+            <span className="font-semibold text-ink">{row.drunkBottles}</span>{" "}
+            <span className="text-sm text-ink-muted">drunk</span>
+          </span>
+          <span className="block text-sm text-ink-subtle">
+            {row.bottles > 0 ? `${row.bottles} left` : "none left"}
+          </span>
+        </span>
+      ) : (
+        <span className="w-20 shrink-0 text-right tabular-nums">
+          <span className="font-semibold text-ink">{row.bottles}</span>{" "}
+          <span className="text-sm text-ink-muted">{row.bottles === 1 ? "bottle" : "bottles"}</span>
+        </span>
+      )}
     </Link>
   );
 }

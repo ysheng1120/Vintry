@@ -29,24 +29,31 @@ interface CellarData {
   wines: Wine[];
   lots: Lot[];
   locations: Map<string, Location>;
+  /** Bottles drunk per wine id. */
+  drunkByWine: Map<string, number>;
 }
 
 async function loadCellar(): Promise<CellarData> {
-  const [wines, lots, locations] = await Promise.all([
+  const [wines, lots, locations, consumptions] = await Promise.all([
     db.wines.toArray(),
     db.lots.toArray(),
     db.locations.toArray(),
+    db.consumptions.toArray(),
   ]);
+  const drunkByWine = new Map<string, number>();
+  for (const c of consumptions)
+    drunkByWine.set(c.wineId, (drunkByWine.get(c.wineId) ?? 0) + c.quantity);
   return {
     wines: wines.filter((w) => !w.deletedAt),
     lots,
     locations: new Map(locations.map((l) => [l.id, l])),
+    drunkByWine,
   };
 }
 
 // ---------- cellar list ----------
 
-export type CellarSort = "name" | "vintage" | "window" | "recent";
+export type CellarSort = "name" | "vintage" | "window" | "recent" | "bottles" | "cost" | "value";
 
 export interface CellarQuery {
   /** Words to find in producer, name, region, country, appellation, grapes and vintage. */
@@ -58,7 +65,10 @@ export interface CellarQuery {
   regions?: string[];
   /** Also show wines with no bottles left. */
   includeDrunk?: boolean;
-  /** Show only wines with no bottles left (the Drunk filter, R3). */
+  /**
+   * Show only wines with at least one bottle drunk, or none left (the Drunk filter, R3). A wine
+   * with bottles still in the cellar shows here too once one of them is drunk.
+   */
   drunkOnly?: boolean;
   sort?: CellarSort;
 }
@@ -73,6 +83,43 @@ export interface CellarRow {
   locationNames: string[];
   /** When bottles of this wine were last added. */
   lastAddedAt: string;
+  /** Bottles of this wine recorded as drunk. */
+  drunkBottles: number;
+  /**
+   * What the bottles cost per bottle: the average price of the open lots (of all lots once none
+   * is open), in the currency most of them use. Null when no lot has a price.
+   */
+  costPerBottle: { amount: number; currency: string } | null;
+}
+
+/** Average price per bottle in the currency most bottles were bought in (never converted). */
+function costPerBottle(lots: Lot[]): CellarRow["costPerBottle"] {
+  const open = lots.filter((l) => l.quantity > 0);
+  const priced = (open.length > 0 ? open : lots).filter(
+    (l) => l.pricePerBottle !== null && l.currency !== null,
+  );
+  // A drunk lot has quantity 0; it still counts once.
+  const byCurrency = new Map<string, { bottles: number; total: number }>();
+  for (const lot of priced) {
+    const weight = Math.max(lot.quantity, 1);
+    const entry = byCurrency.get(lot.currency!) ?? { bottles: 0, total: 0 };
+    entry.bottles += weight;
+    entry.total += lot.pricePerBottle! * weight;
+    byCurrency.set(lot.currency!, entry);
+  }
+  let best: { currency: string; bottles: number; total: number } | null = null;
+  for (const [currency, entry] of byCurrency) {
+    if (
+      !best ||
+      entry.bottles > best.bottles ||
+      (entry.bottles === best.bottles && currency < best.currency)
+    ) {
+      best = { currency, ...entry };
+    }
+  }
+  return best
+    ? { amount: Math.round((best.total / best.bottles) * 100) / 100, currency: best.currency }
+    : null;
 }
 
 function buildRows(data: CellarData, year: number): CellarRow[] {
@@ -94,6 +141,8 @@ function buildRows(data: CellarData, year: number): CellarRow[] {
       locationIds,
       locationNames: locationIds.map((id) => data.locations.get(id)?.name ?? "Unknown location"),
       lastAddedAt: lots.reduce((max, l) => (l.createdAt > max ? l.createdAt : max), wine.createdAt),
+      drunkBottles: data.drunkByWine.get(wine.id) ?? 0,
+      costPerBottle: costPerBottle(lots),
     };
   });
 }
@@ -119,7 +168,38 @@ const byName = (a: Wine, b: Wine) =>
   normalizeName(a.name).localeCompare(normalizeName(b.name)) ||
   (a.vintage ?? 9999) - (b.vintage ?? 9999);
 
-const SORTS: Record<CellarSort, (a: CellarRow, b: CellarRow) => number> = {
+type Money = { amount: number; currency: string } | null;
+
+/**
+ * Highest amount first, without converting currencies: amounts in the currency most of the
+ * listed wines use come first, then each other currency in turn. Wines with no amount go last.
+ */
+function byMoney(pick: (row: CellarRow) => Money, rows: CellarRow[]) {
+  const uses = new Map<string, number>();
+  for (const row of rows) {
+    const money = pick(row);
+    if (money) uses.set(money.currency, (uses.get(money.currency) ?? 0) + 1);
+  }
+  const rank = (currency: string) => uses.get(currency) ?? 0;
+  return (a: CellarRow, b: CellarRow) => {
+    const x = pick(a);
+    const y = pick(b);
+    if (!x || !y) return (x ? 0 : 1) - (y ? 0 : 1) || byName(a.wine, b.wine);
+    return (
+      rank(y.currency) - rank(x.currency) ||
+      x.currency.localeCompare(y.currency) ||
+      y.amount - x.amount ||
+      byName(a.wine, b.wine)
+    );
+  };
+}
+
+const rowValue = (row: CellarRow): Money => wineValue(row.wine);
+
+const SORTS: Record<
+  Exclude<CellarSort, "cost" | "value">,
+  (a: CellarRow, b: CellarRow) => number
+> = {
   name: (a, b) => byName(a.wine, b.wine),
   // Oldest vintage first; non-vintage last.
   vintage: (a, b) =>
@@ -130,7 +210,16 @@ const SORTS: Record<CellarSort, (a: CellarRow, b: CellarRow) => number> = {
     (a.wine.windowFrom ?? Infinity) - (b.wine.windowFrom ?? Infinity) ||
     byName(a.wine, b.wine),
   recent: (a, b) => b.lastAddedAt.localeCompare(a.lastAddedAt) || byName(a.wine, b.wine),
+  // Most bottles first; in the Drunk view, most bottles drunk first.
+  bottles: (a, b) =>
+    b.bottles - a.bottles || b.drunkBottles - a.drunkBottles || byName(a.wine, b.wine),
 };
+
+function sorter(sort: CellarSort, rows: CellarRow[]) {
+  if (sort === "cost") return byMoney((row) => row.costPerBottle, rows);
+  if (sort === "value") return byMoney(rowValue, rows);
+  return SORTS[sort];
+}
 
 export function filterCellarRows(rows: CellarRow[], query: CellarQuery): CellarRow[] {
   const words = normalizeName(query.search ?? "")
@@ -138,9 +227,9 @@ export function filterCellarRows(rows: CellarRow[], query: CellarQuery): CellarR
     .filter(Boolean);
   const has = <T>(list: T[] | undefined, value: T) => !list?.length || list.includes(value);
 
-  return rows
+  const matched = rows
     .filter((row) => {
-      if (query.drunkOnly) return row.bottles === 0;
+      if (query.drunkOnly) return row.bottles === 0 || row.drunkBottles > 0;
       return query.includeDrunk || row.bottles > 0;
     })
     .filter((row) => has(query.colours, row.wine.colour))
@@ -155,8 +244,8 @@ export function filterCellarRows(rows: CellarRow[], query: CellarQuery): CellarR
       if (!words.length) return true;
       const text = searchText(row.wine);
       return words.every((word) => text.includes(word));
-    })
-    .sort(SORTS[query.sort ?? "name"]);
+    });
+  return matched.sort(sorter(query.sort ?? "name", matched));
 }
 
 export async function getCellarList(

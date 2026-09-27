@@ -281,6 +281,27 @@ describe("HomePage", () => {
     // jsdom is slower than a real browser; a generous ceiling still catches a real regression.
     expect(elapsed).toBeLessThan(2000);
   });
+
+  it("shows at most 6 wines per section until Show all is pressed", async () => {
+    const wines = Array.from({ length: 9 }, (_, i) =>
+      makeWine({ producer: `Estate ${i}`, colour: "red", windowFrom: 2020, windowTo: 2040 }),
+    );
+    await db.wines.bulkAdd(wines);
+    await db.lots.bulkAdd(wines.map((w) => makeLot({ wineId: w.id, quantity: 1 })));
+
+    renderHome();
+    const heading = await screen.findByRole("heading", { name: "Ready now" });
+    const section = heading.closest("section")!;
+    expect(within(section).getAllByRole("listitem")).toHaveLength(6);
+
+    const button = within(section).getByRole("button", { name: "Show all 9" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(button);
+    expect(within(section).getAllByRole("listitem")).toHaveLength(9);
+
+    await userEvent.click(within(section).getByRole("button", { name: "Show fewer" }));
+    expect(within(section).getAllByRole("listitem")).toHaveLength(6);
+  });
 });
 
 describe("HomePage with AI ready", () => {

@@ -109,6 +109,50 @@ describe("ImportPage", () => {
     expect(await screen.findByRole("link", { name: "Go to cellar" })).toBeInTheDocument();
   });
 
+  it("creates the locations a file names, instead of putting their bottles under No location", async () => {
+    await db.locations.add(makeLocation({ id: "kitchen", name: "Kitchen rack" }));
+    renderPage();
+
+    await chooseFile(
+      "Producer,Wine,Vintage,Color,Quantity,Location,Bin\n" +
+        "Ridge,Monte Bello,2019,Red,6,Rack 1,A1\n" +
+        "Ridge,Lytton Springs,2020,Red,3,rack 1,A2\n" +
+        "Ridge,Geyserville,2021,Red,2,Rack 2,\n" +
+        "Ridge,East Bench,2021,Red,1,Kitchen Rack,\n",
+      "racks.csv",
+    );
+    await screen.findByText(/Generic CSV/);
+    await userEvent.selectOptions(screen.getByLabelText(/^Producer/), "Producer");
+    await userEvent.selectOptions(screen.getByLabelText(/^Cuvée/), "Wine");
+    await userEvent.selectOptions(screen.getByLabelText(/^Vintage/), "Vintage");
+    await userEvent.selectOptions(screen.getByLabelText(/^Location/), "Location");
+    await userEvent.selectOptions(screen.getByLabelText(/^Bin/), "Bin");
+    await userEvent.selectOptions(screen.getByLabelText(/^Quantity/), "Quantity");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText("Default currency");
+    await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+
+    expect(await screen.findByText("2 new locations will be created:")).toBeInTheDocument();
+    expect(screen.getByText("Rack 1, Rack 2")).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Rack 1 · A1")).toBeInTheDocument();
+    expect(within(table).getByText("Kitchen rack")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Import 4 wines/ }));
+    await waitFor(async () => expect(await db.wines.count()).toBe(4));
+
+    const locations = await db.locations.toArray();
+    expect(locations.map((l) => l.name).sort()).toEqual(["Kitchen rack", "Rack 1", "Rack 2"]);
+    const idOf = (name: string) => locations.find((l) => l.name === name)!.id;
+    const lots = await db.lots.toArray();
+    const bottlesAt = (id: string) =>
+      lots.filter((l) => l.locationId === id).reduce((sum, l) => sum + l.quantity, 0);
+    expect(bottlesAt(idOf("Rack 1"))).toBe(9);
+    expect(bottlesAt(idOf("Rack 2"))).toBe(2);
+    expect(bottlesAt("kitchen")).toBe(1);
+    expect(lots.some((l) => l.locationId === null)).toBe(false);
+  });
+
   it("reuses an existing location whose name matches a typed new-location name", async () => {
     await db.locations.add(makeLocation({ id: "kitchen", name: "Kitchen rack" }));
     renderPage();
