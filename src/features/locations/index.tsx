@@ -1,5 +1,6 @@
-import { AlertTriangle, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { AlertTriangle, ChevronDown, MapPin, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -10,11 +11,16 @@ import { IconButton } from "../../components/ui/IconButton";
 import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Skeleton } from "../../components/ui/Skeleton";
+import { db } from "../../db/db";
 import { createLocation, deleteLocation, renameLocation } from "../../domain/commands";
 import { bottles } from "../../domain/labels";
 import { useLocationsWithCounts, type LocationWithCounts } from "../../domain/selectors";
 import { pluralize } from "../../lib/format";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
+import { binLabel, countLots, filterBinGroups, groupLotsByBin, type BinGroup } from "./bins";
+
+/** Above this many lots, an expanded location gets a search box to narrow what's shown. */
+const SEARCH_THRESHOLD = 12;
 
 /** Where bottles live (R7): add, rename, and delete locations. */
 export default function LocationsPage() {
@@ -97,6 +103,8 @@ function LocationRow({ row }: { row: LocationWithCounts }) {
   const [renameError, setRenameError] = useState<string | undefined>();
   const [refusal, setRefusal] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const contentsId = useId();
 
   const rename = async (event: FormEvent) => {
     event.preventDefault();
@@ -197,12 +205,29 @@ function LocationRow({ row }: { row: LocationWithCounts }) {
               </p>
             </div>
             {row.bottles > 0 && (
-              <Link
-                to={`/cellar?location=${encodeURIComponent(location.id)}`}
-                className="min-h-10 content-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-primary-soft"
-              >
-                View bottles<span className="sr-only"> in {location.name}</span>
-              </Link>
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={expanded}
+                  aria-controls={contentsId}
+                  icon={
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`size-4 transition-transform ${expanded ? "rotate-180" : ""}`}
+                    />
+                  }
+                  onClick={() => setExpanded((value) => !value)}
+                >
+                  {expanded ? "Hide contents" : "Show contents"}
+                </Button>
+                <Link
+                  to={`/cellar?location=${encodeURIComponent(location.id)}`}
+                  className="min-h-10 content-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-primary-soft"
+                >
+                  View bottles<span className="sr-only"> in {location.name}</span>
+                </Link>
+              </>
             )}
             <IconButton
               label={`Rename ${location.name}`}
@@ -230,6 +255,84 @@ function LocationRow({ row }: { row: LocationWithCounts }) {
           {refusal}
         </p>
       )}
+      {expanded && row.bottles > 0 && (
+        <div id={contentsId} className="mt-3 border-t border-border pt-3">
+          <LocationBins locationId={location.id} />
+        </div>
+      )}
     </li>
+  );
+}
+
+/** What's inside a location, grouped by bin (R7). Loads only while expanded. */
+function LocationBins({ locationId }: { locationId: string }) {
+  const groups = useLiveQuery(async () => {
+    const lots = await db.lots.where("locationId").equals(locationId).toArray();
+    const here = lots.filter((l) => l.quantity > 0);
+    const wines = await db.wines.bulkGet([...new Set(here.map((l) => l.wineId))]);
+    const live = new Map(wines.flatMap((w) => (w && !w.deletedAt ? [[w.id, w] as const] : [])));
+    return groupLotsByBin(here, live);
+  }, [locationId]);
+  const [search, setSearch] = useState("");
+  const searchId = useId();
+
+  if (groups === undefined) {
+    return <Skeleton className="h-12 rounded-xl" />;
+  }
+
+  const showSearch = countLots(groups) > SEARCH_THRESHOLD;
+  const visible = showSearch ? filterBinGroups(groups, search) : groups;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {showSearch && (
+        <Field label="Find a wine in this location" hideLabel id={searchId} className="max-w-sm">
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-subtle"
+            />
+            <Input
+              id={searchId}
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search wines in this location…"
+              autoComplete="off"
+              className="pl-9"
+            />
+          </div>
+        </Field>
+      )}
+      {visible.length === 0 ? (
+        <p className="text-sm text-ink-muted">No wines match “{search}”.</p>
+      ) : (
+        visible.map((group) => <BinCard key={group.bin ?? ""} group={group} />)
+      )}
+    </div>
+  );
+}
+
+function BinCard({ group }: { group: BinGroup }) {
+  return (
+    <div className="rounded-xl bg-surface-muted p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-semibold text-ink">{binLabel(group.bin)}</h3>
+        <span className="text-sm text-ink-muted">{bottles(group.bottles)}</span>
+      </div>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {group.rows.map((row) => (
+          <li key={row.lotId} className="flex items-center justify-between gap-3 text-sm">
+            <Link
+              to={`/wine/${row.wineId}`}
+              className="min-w-0 truncate text-primary hover:underline"
+            >
+              {row.label}
+            </Link>
+            <span className="shrink-0 text-ink-muted">{bottles(row.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
