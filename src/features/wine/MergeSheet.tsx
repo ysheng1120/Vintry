@@ -7,7 +7,7 @@ import { Input } from "../../components/ui/Input";
 import { db } from "../../db/db";
 import { mergeWines } from "../../domain/commands";
 import { bottles, wineLabel } from "../../domain/labels";
-import { isMatchCandidate, normalizeName } from "../../domain/match";
+import { normalizeName } from "../../domain/match";
 import type { Wine } from "../../domain/types";
 import { pluralize } from "../../lib/format";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
@@ -29,9 +29,8 @@ function matches(wine: Wine, words: string[]): boolean {
 function useOtherWines(wine: Wine): Wine[] | undefined {
   return useLiveQuery(async () => {
     const all = await db.wines.toArray();
-    return all.filter(
-      (w) => w.id !== wine.id && isMatchCandidate(w) && w.isSample === wine.isSample,
-    );
+    // Not isMatchCandidate: that skips every sample wine, but sample wines may merge with each other.
+    return all.filter((w) => w.id !== wine.id && !w.deletedAt && w.isSample === wine.isSample);
   }, [wine.id, wine.isSample]);
 }
 

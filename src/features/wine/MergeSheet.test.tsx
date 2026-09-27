@@ -96,4 +96,28 @@ describe("MergeSheet", () => {
       await within(dialog).findByText("There's no other wine in your cellar yet."),
     ).toBeInTheDocument();
   });
+
+  it("offers other sample wines when the wine is sample data", async () => {
+    const keep = makeWine({
+      producer: "Ridge",
+      name: "Monte Bello",
+      vintage: 2019,
+      isSample: true,
+    });
+    const other = makeWine({
+      producer: "Ridge",
+      name: "Monte Bello",
+      vintage: 2019,
+      isSample: true,
+    });
+    const real = makeWine({ producer: "Ridge", name: "Monte Bello", vintage: 2019 });
+    await db.wines.bulkAdd([keep, other, real]);
+
+    renderSheet(keep);
+    const dialog = await screen.findByRole("dialog", { name: "Merge with another wine" });
+    // One option (the other sample wine); the real wine is not offered.
+    expect(
+      await within(dialog).findAllByRole("button", { name: /Ridge Monte Bello 2019/ }),
+    ).toHaveLength(1);
+  });
 });
