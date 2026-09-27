@@ -87,6 +87,23 @@ describe("mergeWines", () => {
     expect((await db.wines.get(keep.id))?.region).toBe("Elsewhere");
   });
 
+  it("keeps the duplicate's AI profile when the kept wine has none", async () => {
+    const { keep, merge } = await seedDuplicates();
+    const profile = {
+      summary: "A classic.",
+      tasting: "Cassis.",
+      pairings: ["Lamb"],
+      serving: "Decant.",
+      generatedAt: "2026-09-27T00:00:00.000Z",
+      model: "claude-opus-5",
+    };
+    await db.wines.update(merge.id, { profile });
+
+    await mergeWines({ keepId: keep.id, mergeId: merge.id });
+
+    expect((await db.wines.get(keep.id))?.profile).toEqual(profile);
+  });
+
   it("undo restores the exact before state: lots, drink and note move back, the kept wine's filled fields clear, and the merged wine is undeleted", async () => {
     const { keep, merge } = await seedDuplicates();
     const before = await db.wines.get(keep.id);

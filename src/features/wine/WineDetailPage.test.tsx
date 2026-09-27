@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeLocation, makeLot, makeWine, resetDatabase } from "../../db/testing";
@@ -253,6 +253,17 @@ describe("Wine detail", () => {
     const link = await screen.findByRole("link", { name: "On your wishlist" });
     expect(link).toHaveAttribute("href", "/wishlist");
     expect(screen.queryByRole("button", { name: "Buy again" })).not.toBeInTheDocument();
+  });
+
+  it("adds the wine to the wishlist only once when Buy again is clicked twice quickly", async () => {
+    const { wine } = await seedWine(6);
+    await openWine(wine.id);
+    const button = screen.getByRole("button", { name: "Buy again" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await screen.findByRole("link", { name: "On your wishlist" });
+    expect(await db.wishlist.count()).toBe(1);
   });
 
   it("shows On your wishlist when a matching item is already on the wishlist", async () => {

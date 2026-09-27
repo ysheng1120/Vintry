@@ -56,6 +56,7 @@ export default function WineDetailPage() {
   const { done, failed } = useCommandFeedback();
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [deleting, setDeleting] = useState(false);
+  const [addingToWishlist, setAddingToWishlist] = useState(false);
 
   if (detail === undefined) {
     return (
@@ -116,6 +117,9 @@ export default function WineDetailPage() {
   const wishlistMatch = findWishlistMatch(wishlist, wine);
 
   const buyAgain = async () => {
+    // A second click before the wishlist updates must not add the wine twice.
+    if (addingToWishlist) return;
+    setAddingToWishlist(true);
     try {
       const result = await addWishlistItem({
         producer: wine.producer,
@@ -129,6 +133,8 @@ export default function WineDetailPage() {
       done(result);
     } catch (error) {
       failed(error, "Couldn't add this to your wishlist");
+    } finally {
+      setAddingToWishlist(false);
     }
   };
 
@@ -198,6 +204,7 @@ export default function WineDetailPage() {
             <Button
               variant="ghost"
               icon={<ShoppingCart aria-hidden="true" className="size-4" />}
+              disabled={addingToWishlist}
               onClick={() => void buyAgain()}
             >
               Buy again

@@ -36,6 +36,19 @@ describe("Cellar list pagination", () => {
     expect(screen.queryByRole("button", { name: /Show more/ })).not.toBeInTheDocument();
   });
 
+  it("keeps the rows shown when a live update changes data elsewhere", async () => {
+    await seedManyWines(240);
+    const { user } = renderCellarApp("/cellar");
+    await screen.findByRole("link", { name: /Producer 000/ });
+    await user.click(screen.getByRole("button", { name: /Show more/ }));
+    expect(rows()).toHaveLength(200);
+
+    const other = (await db.wines.toArray()).at(-1)!;
+    await db.wines.update(other.id, { rating: 80 });
+    await screen.findByRole("button", { name: /Show more \(40 more\)/ });
+    expect(rows()).toHaveLength(200);
+  });
+
   it("does not show a Show more button under the page size", async () => {
     await seedManyWines(5);
     renderCellarApp("/cellar");

@@ -101,10 +101,13 @@ export default function CellarPage() {
   // Only the first page of the (possibly long) filtered list is mounted; a new search, filter or
   // sort starts back at the first page rather than keeping however many rows were shown before
   // (the same during-render comparison `syncedKey` above uses, so this needs no extra effect).
+  // Keyed on the query, not on `view`: a live update elsewhere (a drink, an AI profile) makes a
+  // new `view` object and must not collapse the list the collector is reading.
+  const pageKey = `${params.toString()}|${search}`;
   const [rowsShown, setRowsShown] = useState(ROWS_PER_PAGE);
-  const [pagedView, setPagedView] = useState(view);
-  if (pagedView !== view) {
-    setPagedView(view);
+  const [pagedKey, setPagedKey] = useState(pageKey);
+  if (pagedKey !== pageKey) {
+    setPagedKey(pageKey);
     setRowsShown(ROWS_PER_PAGE);
   }
 
