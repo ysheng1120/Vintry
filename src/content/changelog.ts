@@ -15,6 +15,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    date: "2026-09-27",
+    headline: "Suggested price, locations kept on import, and more ways to sort.",
+    changes: [
+      "Suggested price: with an AI key, see prices for a wine from reputable wine shops and price sites, below What critics say, with a link to each page. It never changes what you paid or your own value.",
+      "Importing a file with a location column now puts the bottles in those locations, and creates any location you do not have yet. The preview lists them first.",
+      "A wine now shows under Drunk as soon as you drink one bottle, with how many you drank and how many are left.",
+      "Sort the cellar by most bottles, cost per bottle, or your own value.",
+      "Home shows up to 6 wines in each section, with Show all for the rest.",
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-09-27",
     headline: "Automatic backups, What critics say, and a guard against double imports.",

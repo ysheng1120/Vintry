@@ -42,6 +42,8 @@ export const CHAT_HUMAN_ONLY: Partial<Record<CommandName, string>> = {
   setWineProfile: "The wine profile is written by the About this wine button.",
   setWineCritics:
     "What critics say is researched on the web only when the collector asks, from the wine's page.",
+  setWinePrices:
+    "Suggested prices are researched on the web only when the collector asks, from the wine's page.",
 };
 
 /** Commands the sommelier can propose, by tool name. */

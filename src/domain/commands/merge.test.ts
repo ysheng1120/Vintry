@@ -121,6 +121,31 @@ describe("mergeWines", () => {
     expect((await db.wines.get(keep.id))?.critics).toEqual(critics);
   });
 
+  it("keeps the duplicate's suggested prices when the kept wine has none", async () => {
+    const { keep, merge } = await seedDuplicates();
+    const prices = {
+      summary: "",
+      points: [
+        {
+          price: "£210",
+          amount: 210,
+          currency: "GBP",
+          bottleSize: null,
+          kind: "retail" as const,
+          source: { url: "https://www.bbr.com/x", title: "BBR" },
+        },
+      ],
+      found: true,
+      generatedAt: "2026-09-27T00:00:00.000Z",
+      model: "claude-opus-5",
+    };
+    await db.wines.update(merge.id, { prices });
+
+    await mergeWines({ keepId: keep.id, mergeId: merge.id });
+
+    expect((await db.wines.get(keep.id))?.prices).toEqual(prices);
+  });
+
   it("undo restores the exact before state: lots, drink and note move back, the kept wine's filled fields clear, and the merged wine is undeleted", async () => {
     const { keep, merge } = await seedDuplicates();
     const before = await db.wines.get(keep.id);

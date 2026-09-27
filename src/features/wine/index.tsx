@@ -40,6 +40,7 @@ import { LotsCard } from "./LotsCard";
 import { MergeSheet } from "./MergeSheet";
 import { MoveSheet } from "./MoveSheet";
 import { NoteSheet } from "./NoteSheet";
+import PricesCard from "./PricesCard";
 import { WindowSheet } from "./WindowSheet";
 import { TastingHistory, WineActivity } from "./WineHistory";
 
@@ -259,6 +260,7 @@ export default function WineDetailPage() {
           </Card>
           <AboutWineCard wine={wine} />
           <CriticsCard wine={wine} />
+          <PricesCard wine={wine} />
           {wine.notes && (
             <Card padding="lg">
               <h2 className="mb-2 text-lg font-semibold">Notes</h2>

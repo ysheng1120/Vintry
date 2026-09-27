@@ -28,6 +28,7 @@ const FILLABLE_FIELDS = [
   "notes",
   "profile",
   "critics",
+  "prices",
 ] as const satisfies readonly (keyof Wine)[];
 
 /**

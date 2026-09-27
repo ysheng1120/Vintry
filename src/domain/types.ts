@@ -78,7 +78,7 @@ export const WineProfileSchema = z.object({
 });
 export type WineProfile = z.infer<typeof WineProfileSchema>;
 
-/** A web page a critics' summary cites. The URL is shown only when it is http(s). */
+/** A web page an AI summary cites (critics, prices). The URL is shown only when it is http(s). */
 export const CriticSourceSchema = z.object({
   url: z.string(),
   title: z.string(),
@@ -113,6 +113,42 @@ export const WineCriticsSchema = z.object({
   model: z.string(),
 });
 export type WineCritics = z.infer<typeof WineCriticsSchema>;
+
+/** What kind of price a source shows: a shop's offer, an average across shops, or an auction. */
+export const PRICE_KINDS = ["retail", "average", "auction"] as const;
+export const PriceKindSchema = z.enum(PRICE_KINDS);
+export type PriceKind = z.infer<typeof PriceKindSchema>;
+
+/**
+ * "Suggested price": prices for this wine and vintage found on reputable price and merchant
+ * sites. Display only: it never sets a lot's price or the collector's value. A price is kept
+ * only when the text cited from its page shows that amount and currency (checked in code).
+ * Currencies are never converted or mixed.
+ */
+export const WinePricesSchema = z.object({
+  /** One short line without figures, or "" when there is none. */
+  summary: z.string(),
+  points: z
+    .array(
+      z.object({
+        /** As the source writes it, e.g. "£1,250" or "1250.00". */
+        price: z.string(),
+        /** The amount read from `price` in code. */
+        amount: z.number().positive(),
+        currency: CurrencySchema,
+        /** Bottle size in ml when the source states it. */
+        bottleSize: z.number().int().positive().nullable().default(null),
+        kind: PriceKindSchema,
+        source: CriticSourceSchema,
+      }),
+    )
+    .default([]),
+  /** False when no prices were found for this wine and vintage. */
+  found: z.boolean(),
+  generatedAt: z.string(),
+  model: z.string(),
+});
+export type WinePrices = z.infer<typeof WinePricesSchema>;
 
 export const WineSchema = z.object({
   ...base,
@@ -151,6 +187,8 @@ export const WineSchema = z.object({
   profile: WineProfileSchema.nullable().optional(),
   /** "What critics say", researched on the web from this wine's identity. Missing on older rows. */
   critics: WineCriticsSchema.nullable().optional(),
+  /** "Suggested price", researched on the web from this wine's identity. Missing on older rows. */
+  prices: WinePricesSchema.nullable().optional(),
 });
 export type Wine = z.infer<typeof WineSchema>;
 
