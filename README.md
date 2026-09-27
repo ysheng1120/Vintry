@@ -22,7 +22,7 @@ You can also put Vintry at your own free web address that updates itself, instal
 - **Keep records:** drink a bottle with a rating and note, move bottles between locations and bins, keep tasting notes, a wishlist, history, and stats with a yearly recap.
 - **Tidy up:** merge two records of the same wine in one step.
 - **Undo anything:** every change can be undone from the toast or from History.
-- **Stay safe:** one-click backups, reminders to back up, and restore with a safety snapshot.
+- **Stay safe:** automatic backups to a folder on your computer when you use the launcher, one-click backups, reminders to back up, and restore with a safety snapshot.
 - **Works offline and without AI.** AI features switch on when you add your own Claude API key.
 
 ## Screenshots

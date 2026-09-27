@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration } from "react-router";
+import AutoBackupWatcher from "../features/backup/AutoBackupWatcher";
 import BackupReminder from "../features/backup/BackupReminder";
 import { FirstRunRedirect } from "../features/onboarding/FirstRunRedirect";
 import { SafariTabWarning } from "../features/onboarding/SafariTabWarning";
@@ -16,6 +17,7 @@ export function Root() {
       <ScrollRestoration />
       <FirstRunRedirect />
       <BackupReminder />
+      <AutoBackupWatcher />
       <SampleDataWatcher />
       <SafariTabWarning />
       <WhatsNewNotice />

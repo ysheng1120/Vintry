@@ -37,7 +37,7 @@ test("import a CellarTracker file, back it up, erase everything, and restore", a
   await expect(page.getByText("Detected format:")).toContainText("CellarTracker");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Preview import" }).click();
-  await expect(page.getByText("3 wines will be added.")).toBeVisible();
+  await expect(page.getByText(/3 wines will be imported/)).toBeVisible();
   await expect(page.getByRole("table")).toContainText("Château Margaux");
   await page.getByRole("button", { name: "Import 3 wines" }).click();
   await page.getByRole("link", { name: "Go to cellar" }).click();

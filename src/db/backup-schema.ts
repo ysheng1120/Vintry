@@ -1,3 +1,5 @@
+// Imports name their .ts files: vite.config.ts loads this module in Node, where the launcher's
+// server checks automatic backups with these schemas (server/autoBackupPlugin.ts).
 import { z } from "zod";
 import {
   ChatMessageSchema,
@@ -10,8 +12,8 @@ import {
   TastingNoteSchema,
   WineSchema,
   WishlistItemSchema,
-} from "../domain/types";
-import { SETTING_KEYS } from "./settingKeys";
+} from "../domain/types.ts";
+import { SETTING_KEYS } from "./settingKeys.ts";
 
 /**
  * Tables a backup carries (KTD15). `aiUsage` and `snapshots` stay on the device: they are never

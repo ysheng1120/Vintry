@@ -96,11 +96,26 @@ See **More → What's new** for the list of changes.
 
 ## Back up your cellar
 
-Your cellar lives in your browser. Back it up now and then:
+Your cellar lives in your browser. Back it up now and then.
+
+### Automatic backups (launcher)
+
+When you start Vintry with the launcher, it saves backups by itself, in every browser:
+
+- About a minute after your changes, and when you close the tab, Vintry saves a backup file to the **Vintry Backups** folder in your **Documents** folder. On Windows with OneDrive, that is the Documents folder in OneDrive. The files stay on your computer.
+- Vintry keeps the newest 30 files there and deletes older ones. It never touches other files in that folder.
+- **More → Backup & restore** shows the folder and when the last backup was saved.
+- To restore, open **More → Backup & restore → Restore from backup** and choose a file from that folder.
+- If a backup can't be saved (for example, the disk is full), Vintry shows a notice that says why.
+- To use another folder, set the `VINTRY_BACKUP_DIR` environment variable to that folder before you start the launcher.
+
+Automatic backups need the launcher window to stay open. On your own web address, back up by hand as below.
+
+### Back up by hand
 
 - Open **More → Backup & restore** and click **Export backup**. Save the file somewhere safe, for example a cloud-synced folder.
 - In Chrome and Edge you can choose a backup folder once. After that, **Back up now** saves a dated file there in one click and keeps the newest 10.
-- Vintry reminds you to back up after 20 changes or 14 days.
+- Vintry reminds you to back up after 20 changes or 14 days. While automatic backups work, they count as backups, so these reminders stay away.
 
 ### Move your cellar to another computer or browser
 
@@ -112,7 +127,7 @@ Your cellar lives in your browser. Back it up now and then:
 ## Privacy
 
 - Your cellar and your AI key stay in your browser on your computer. Vintry has no server and no account.
-- When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you ask it to tidy, the wine details it uses to estimate drinking windows, the wine's name and origin for About this wine, the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.
+- When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you ask it to tidy, the wine details it uses to estimate drinking windows, the wine's name and origin for About this wine and for What critics say (Anthropic uses it to search reputable wine sites), the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.
 - The microphone button uses your browser's own speech service (in Chrome, that sends your voice to Google).
 - Anyone who can use your computer's browser can open Vintry. Remove your key in **Settings** if you share the computer.
 

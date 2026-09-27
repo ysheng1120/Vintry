@@ -158,6 +158,10 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
+        text: "Rows that match bottles already in your cellar (same wine, count, price, purchase date, and location) are marked Already in your cellar and left out. Tick them if you really want to add them again.",
+      },
+      {
+        kind: "text",
         text: "CellarTracker and Vivino files need no AI key. For other CSV files, AI can suggest which column is which, and you can correct it.",
       },
     ],
@@ -172,11 +176,20 @@ export const HELP_SECTIONS: HelpSection[] = [
         text: "Your cellar lives in your browser on this computer. Back it up now and then.",
       },
       {
+        kind: "text",
+        text: "When you start Vintry with the launcher, it backs up by itself, in every browser. About a minute after your changes, and when you close the tab, it saves a file to the Vintry Backups folder in your Documents folder. It keeps the newest 30. More → Backup & restore shows the folder and the last backup.",
+      },
+      {
+        kind: "text",
+        text: "To restore one of those files, open More → Backup & restore → Restore from backup and choose a file from that folder.",
+      },
+      { kind: "text", text: "You can also back up by hand:" },
+      {
         kind: "list",
         items: [
           "Open More → Backup & restore and click Export backup. Save the file somewhere safe, for example a cloud-synced folder.",
           "In Chrome and Edge you can choose a backup folder once. After that, Back up now saves a dated file there in one click and keeps the newest 10.",
-          "Vintry reminds you to back up after 20 changes or 14 days.",
+          "Vintry reminds you to back up after 20 changes or 14 days. While automatic backups work, they count as backups, so these reminders stay away.",
         ],
       },
       { kind: "text", text: "To move your cellar to another computer or browser:" },
@@ -225,7 +238,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     blocks: [
       {
         kind: "text",
-        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, write an About this wine profile, tidy tasting notes, map unusual CSV files, and ask the sommelier.",
+        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, write an About this wine profile, see What critics say (with a link to each review), tidy tasting notes, map unusual CSV files, and ask the sommelier.",
       },
       {
         kind: "text",
@@ -255,7 +268,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "list",
         items: [
           "Your cellar and your AI key stay in your browser on your computer. Vintry has no server and no account.",
-          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine, the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.",
+          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine and for What critics say (Anthropic uses it to search reputable wine sites), the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.",
           "The microphone button uses your browser's own speech service (in Chrome, that sends your voice to Google).",
           "Anyone who can use your computer's browser can open Vintry. Remove your key in Settings if you share the computer.",
         ],

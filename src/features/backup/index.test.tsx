@@ -1,10 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../../components/ui/Toast";
 import { db } from "../../db/db";
 import { getSetting, SETTING_KEYS } from "../../db/settings";
 import { makeLocation, makeLot, makeWine, resetDatabase } from "../../db/testing";
+import { AUTO_BACKUP_STATUS_URL, resetAutoBackupForTests } from "./autoBackup";
 import BackupPage from "./index";
 
 function renderPage() {
@@ -37,7 +38,12 @@ function backupFile(name: string, text: string): File {
 describe("BackupPage", () => {
   beforeEach(() => {
     stubObjectUrls();
+    resetAutoBackupForTests();
     return resetDatabase();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("shows 'never' with no prior backup", async () => {
@@ -129,5 +135,44 @@ describe("BackupPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Bring back this copy" }));
 
     await waitFor(async () => expect(await db.wines.count()).toBe(1));
+  });
+
+  it("says automatic backups need the launcher when it isn't there, and keeps manual export", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 404 })),
+    );
+    renderPage();
+    expect(
+      await screen.findByText(/Automatic backups work when you start Vintry with the launcher/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export backup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose backup file" })).toBeInTheDocument();
+  });
+
+  it("shows where automatic backups go and when the last one was saved", async () => {
+    const savedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            folder: "/Users/ann/Documents/Vintry Backups",
+            latest: { name: "vintry-backup-2026-09-27-143005.json", savedAt },
+            count: 4,
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+
+    const card = (await screen.findByRole("heading", { name: "Automatic backups" })).closest(
+      "div",
+    )!;
+    expect(card).toHaveTextContent(
+      "On. Vintry saves a backup to /Users/ann/Documents/Vintry Backups after your changes. Last saved 5 minutes ago. The 30 newest are kept.",
+    );
+    expect(card).toHaveTextContent("To restore, choose a file from that folder");
+    expect(fetchMock).toHaveBeenCalledWith(AUTO_BACKUP_STATUS_URL, expect.anything());
   });
 });

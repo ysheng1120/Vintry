@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+import { autoBackupPlugin } from "./server/autoBackupPlugin.ts";
 import { LAUNCHER_PORT, SECURITY_HEADERS } from "./src/config/securityHeaders.ts";
 
 const BURGUNDY = "#6d1a36";
@@ -22,6 +23,8 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // Saves automatic backups to a folder on disk; only `vite preview` (the launcher) gets it.
+    autoBackupPlugin(),
     VitePWA({
       registerType: "prompt",
       // The app registers the service worker itself (src/app/pwaRegister.ts, for the update prompt).

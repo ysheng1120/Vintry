@@ -1,4 +1,4 @@
-import { Download, FolderOpen, RotateCcw, Trash2, Upload } from "lucide-react";
+import { Download, FolderCheck, FolderOpen, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   backupFileName,
@@ -20,6 +20,12 @@ import { Sheet } from "../../components/ui/Sheet";
 import { useToast } from "../../components/ui/useToast";
 import { formatDate, toIsoDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
+import {
+  AUTO_BACKUPS_KEPT,
+  checkAutoBackup,
+  formatSavedAgo,
+  useAutoBackupState,
+} from "./autoBackup";
 import { buildCellarCsv } from "./cellarCsv";
 import {
   BACKUP_FOLDER_SETTING_KEY,
@@ -127,6 +133,55 @@ function TypedConfirmBody({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Whether the launcher saves backups by itself, and where. Nothing shows while that is being
+ * checked, so the page doesn't flicker between the two messages.
+ */
+function AutoBackupCard() {
+  const autoBackup = useAutoBackupState();
+
+  useEffect(() => {
+    void checkAutoBackup();
+  }, []);
+
+  if (autoBackup.kind === "checking") return null;
+  if (autoBackup.kind === "unavailable") {
+    return (
+      <Card padding="lg" className="space-y-2">
+        <h2 className="text-lg font-medium text-ink">Automatic backups</h2>
+        <p className="text-ink-muted">
+          Automatic backups work when you start Vintry with the launcher (Start Vintry). Here, use
+          Export backup below.
+        </p>
+      </Card>
+    );
+  }
+
+  const { folder, latest } = autoBackup.status;
+  return (
+    <Card padding="lg" className="space-y-2">
+      <h2 className="flex items-center gap-2 text-lg font-medium text-ink">
+        <FolderCheck aria-hidden="true" className="size-5 text-success" />
+        Automatic backups
+      </h2>
+      <p className="text-ink-muted">
+        On. Vintry saves a backup to{" "}
+        <span className="font-medium [overflow-wrap:anywhere] text-ink">{folder}</span> after your
+        changes. {latest ? `Last saved ${formatSavedAgo(latest.savedAt)}.` : "None saved yet."} The{" "}
+        {AUTO_BACKUPS_KEPT} newest are kept.
+      </p>
+      <p className="text-sm text-ink-subtle">
+        To restore, choose a file from that folder under Restore from backup.
+      </p>
+      {autoBackup.error && (
+        <p className="text-sm font-medium text-danger">
+          The last automatic backup didn't work: {autoBackup.error}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -296,6 +351,8 @@ export default function BackupPage() {
       <PageHeader title="Backup & restore" subtitle="Keep your records safe with a backup file." />
 
       <div className="space-y-6">
+        <AutoBackupCard />
+
         <Card padding="lg" className="space-y-2">
           <h2 className="text-lg font-medium text-ink">Status</h2>
           <p className="text-ink-muted">

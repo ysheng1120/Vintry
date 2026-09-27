@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.0",
+    date: "2026-09-27",
+    headline: "Automatic backups, What critics say, and a guard against double imports.",
+    changes: [
+      "When you start Vintry with the launcher, it saves a backup to Documents/Vintry Backups after your changes, in every browser. The 30 newest are kept.",
+      "What critics say: with an AI key, get a short summary of critics' views from reputable wine sites, with a link to each review. Scores show only when the source shows them.",
+      "Importing the same file twice no longer doubles your bottles: rows already in your cellar are left out unless you include them.",
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-09-27",
     headline: "About this wine, your year in wine, what is in each bin, and merging duplicates.",
