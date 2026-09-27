@@ -190,3 +190,92 @@ describe("StatsPage", () => {
     expect(within(await statValue(section, "Bottles drunk")).getByText("1 bottle")).toBeVisible();
   });
 });
+
+/** The "What you like" <section>, once it has rendered. */
+async function findWhatYouLikeSection() {
+  const heading = await screen.findByRole("heading", { name: "What you like" });
+  return heading.closest("section")!;
+}
+
+describe("StatsPage: What you like", () => {
+  beforeEach(resetDatabase);
+
+  it("asks for more ratings when fewer than 5 wines are rated", async () => {
+    await seed(); // one rated wine (Château Margaux, via its tasting note)
+    renderStats();
+
+    const section = await findWhatYouLikeSection();
+    expect(
+      await within(section).findByText("Rate 5 wines to see what you like."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows favourites, an overall average and chips once 5 wines are rated", async () => {
+    await addBottles({
+      drafts: [
+        {
+          producer: "A",
+          vintage: 2015,
+          colour: "red",
+          country: "France",
+          region: "Burgundy",
+          grapes: ["Pinot Noir"],
+          rating: 90,
+          lots: [{ quantity: 1 }],
+        },
+        {
+          producer: "B",
+          vintage: 2016,
+          colour: "red",
+          country: "France",
+          region: "Burgundy",
+          grapes: ["Pinot Noir"],
+          rating: 100,
+          lots: [{ quantity: 1 }],
+        },
+        {
+          producer: "C",
+          vintage: 2018,
+          colour: "white",
+          country: "Germany",
+          region: "Mosel",
+          grapes: ["Riesling"],
+          rating: 70,
+          lots: [{ quantity: 1 }],
+        },
+        {
+          producer: "D",
+          vintage: 2019,
+          colour: "white",
+          country: "Germany",
+          region: "Mosel",
+          grapes: ["Riesling"],
+          rating: 74,
+          lots: [{ quantity: 1 }],
+        },
+        {
+          producer: "E",
+          vintage: 2017,
+          colour: "red",
+          country: "Italy",
+          rating: 60,
+          lots: [{ quantity: 1 }],
+        },
+      ],
+    });
+    renderStats();
+
+    const section = await findWhatYouLikeSection();
+    expect(
+      await within(section).findByRole("img", { name: /Rated 4 out of 5/ }),
+    ).toBeInTheDocument();
+    expect(within(section).getByText(/average across 5 rated wines/)).toBeInTheDocument();
+    expect(
+      within(section).getByText("You rate Red highest (4 stars on average, 3 wines)."),
+    ).toBeInTheDocument();
+    expect(
+      within(section).getByText("You rate Burgundy highest (5 stars on average, 2 wines)."),
+    ).toBeInTheDocument();
+    expect(within(section).getByText("Pinot Noir · 5 stars")).toBeInTheDocument();
+  });
+});

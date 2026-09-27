@@ -10,10 +10,12 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
 import { SkeletonText } from "../../components/ui/Skeleton";
 import { StarRating } from "../../components/ui/StarRating";
+import { Chip } from "../../components/ui/Chip";
 import { currentYear } from "../../domain/clock";
 import { formatMoney } from "../../domain/money";
 import { useStats } from "../../domain/selectors";
 import type { SeriesPoint } from "../../domain/selectors";
+import { useTasteProfile, type Favourite } from "../../domain/taste";
 import {
   useSpendingPerYear,
   useYearInWine,
@@ -220,6 +222,78 @@ function SpendingPerYearCard({ spending }: { spending: SpendingPerYear | undefin
   );
 }
 
+/** A favourite's average rating (0-100) as 0-5 half-star steps, matching StarRating's own scale. */
+function starsOf(rating: number): number {
+  return Math.round(Math.min(100, Math.max(0, rating)) / 10) / 2;
+}
+
+/** "You rate Burgundy highest (4.5 stars on average, 6 wines)." for one favourite, or null. */
+function favouriteLine(favourite: Favourite | undefined): string | null {
+  if (!favourite) return null;
+  return `You rate ${favourite.label} highest (${pluralize(starsOf(favourite.averageRating), "star")} on average, ${pluralize(favourite.count, "wine")}).`;
+}
+
+/** A row of chips for one favourites list (top grapes or top regions); nothing when there are none. */
+function FavouriteChips({ title, favourites }: { title: string; favourites: Favourite[] }) {
+  if (favourites.length === 0) return null;
+  return (
+    <div>
+      <h3 className="mb-2 text-sm text-ink-subtle">{title}</h3>
+      <div className="flex flex-wrap gap-2">
+        {favourites.map((favourite) => (
+          <Chip key={favourite.key}>
+            {favourite.label} · {pluralize(starsOf(favourite.averageRating), "star")}
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** "What you like" (KTD-taste): a taste profile computed from the collector's own ratings, no
+ * AI call. Below the "enough data" threshold it just asks for a few more ratings. */
+function WhatYouLikeSection() {
+  const profile = useTasteProfile();
+  const favouriteLines = profile
+    ? [profile.colours[0], profile.countries[0], profile.regions[0]]
+        .map(favouriteLine)
+        .filter((line): line is string => line !== null)
+    : [];
+
+  return (
+    <section aria-labelledby="what-you-like-heading" className="mt-10">
+      <h2 id="what-you-like-heading" className="mb-4 text-lg font-semibold text-ink">
+        What you like
+      </h2>
+      <Card>
+        {profile === undefined ? (
+          <SkeletonText lines={3} />
+        ) : !profile.enoughData ? (
+          <p className="text-ink-muted">Rate 5 wines to see what you like.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <StarRating value={profile.averageRating} size="sm" />
+              <span className="text-sm text-ink-subtle">
+                average across {pluralize(profile.ratedWines, "rated wine")}
+              </span>
+            </div>
+            {favouriteLines.length > 0 && (
+              <ul className="flex flex-col gap-1 text-ink">
+                {favouriteLines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            )}
+            <FavouriteChips title="Grapes you rate highest" favourites={profile.grapes} />
+            <FavouriteChips title="Regions you rate highest" favourites={profile.regions} />
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 export default function StatsPage() {
   const stats = useStats();
   const spending = useSpendingPerYear();
@@ -310,6 +384,7 @@ export default function StatsPage() {
         <SpendingPerYearCard spending={spending} />
       </div>
       <YearInWineSection />
+      <WhatYouLikeSection />
     </>
   );
 }

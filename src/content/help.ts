@@ -136,6 +136,10 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "text",
         text: "The sommelier can suggest changes, like drinking or moving a bottle. Nothing changes until you confirm it.",
       },
+      {
+        kind: "text",
+        text: "It can use your own ratings to learn what you like (favourite colours, regions and grapes) and suggest bottles accordingly. That summary stays on your computer until the sommelier looks it up to answer you.",
+      },
       { kind: "text", text: "The sommelier needs an AI key." },
     ],
     links: [{ to: "/sommelier", label: "Sommelier" }],
@@ -251,7 +255,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "list",
         items: [
           "Your cellar and your AI key stay in your browser on your computer. Vintry has no server and no account.",
-          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine, the CSV headers and sample rows you ask it to map, or the cellar details the sommelier looks up.",
+          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine, the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.",
           "The microphone button uses your browser's own speech service (in Chrome, that sends your voice to Google).",
           "Anyone who can use your computer's browser can open Vintry. Remove your key in Settings if you share the computer.",
         ],

@@ -252,6 +252,46 @@ describe("list_wishlist", () => {
   });
 });
 
+describe("get_taste_profile", () => {
+  beforeEach(resetDatabase);
+
+  it("says there isn't enough data with fewer than 5 rated wines", async () => {
+    await db.wines.add(makeWine({ rating: 95 }));
+
+    const outcome = await runReadTool("get_taste_profile", {});
+
+    expect(outcome).toMatchObject({ isError: false, chip: "Checked taste profile" });
+    expect(JSON.parse(outcome.content)).toMatchObject({ enoughData: false, ratedWines: 1 });
+  });
+
+  it("reports favourites and the overall average once 5 wines are rated", async () => {
+    await db.wines.bulkAdd([
+      makeWine({ colour: "red", country: "France", region: "Burgundy", rating: 90 }),
+      makeWine({ colour: "red", country: "France", region: "Burgundy", rating: 100 }),
+      makeWine({ colour: "white", country: "Germany", rating: 70 }),
+      makeWine({ colour: "white", country: "Germany", rating: 80 }),
+      makeWine({ colour: "red", country: "Italy", rating: 60 }),
+    ]);
+
+    const outcome = await runReadTool("get_taste_profile", {});
+
+    expect(JSON.parse(outcome.content)).toMatchObject({
+      enoughData: true,
+      ratedWines: 5,
+      averageRating: 80,
+      favouriteColours: [
+        { label: "Red", wines: 3, averageRating: 83.3 },
+        { label: "White", wines: 2, averageRating: 75 },
+      ],
+      favouriteCountries: expect.arrayContaining([
+        { label: "France", wines: 2, averageRating: 95 },
+        { label: "Germany", wines: 2, averageRating: 75 },
+      ]),
+      favouriteRegions: [{ label: "Burgundy", wines: 2, averageRating: 95 }],
+    });
+  });
+});
+
 describe("runReadTool errors", () => {
   beforeEach(resetDatabase);
 

@@ -8,6 +8,7 @@ describe("sommelierTools", () => {
     expect(names).toEqual([
       "cellar_stats",
       "get_consumption_history",
+      "get_taste_profile",
       "get_wine",
       "list_locations",
       "list_wishlist",

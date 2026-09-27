@@ -9,6 +9,7 @@ import {
   getWishlist,
   type CellarRow,
 } from "../../domain/selectors";
+import { getTasteProfile } from "../../domain/taste";
 import { COLOURS } from "../../domain/types";
 import { WINDOW_STATUSES, WINDOW_STATUS_LABELS } from "../../domain/window";
 import { pluralize } from "../../lib/format";
@@ -56,6 +57,7 @@ export const readToolSchemas = {
   list_locations: z.object({}),
   list_wishlist: z.object({}),
   cellar_stats: z.object({}),
+  get_taste_profile: z.object({}),
   get_consumption_history: z.object({
     wineId: z.string().optional().describe("Only this wine; leave out for all wines"),
     limit: z.number().int().min(1).max(100).optional().describe("Most entries, default 20"),
@@ -81,6 +83,8 @@ export const readToolDescriptions: Record<ReadToolName, string> = {
     "List the collector's wishlist, newest first: wines they want to buy, with colour, target price per bottle and their note. These are not in the cellar.",
   cellar_stats:
     "Bottle counts by colour, country, region, vintage decade and window status, and bottles drunk per month over the last year.",
+  get_taste_profile:
+    "The collector's taste, computed from their own ratings (their own scores, tasting notes and drinks): favourite colours, countries, regions and grapes, each with how many rated wines back it up, plus their overall average rating. Call this before recommending a bottle, and whenever they ask what they like or what to buy more of.",
   get_consumption_history: "Bottles drunk, newest first, with date, rating and occasion.",
   show_bottles:
     "Show wines from the cellar as cards the collector can open. Use it for every bottle you recommend or discuss. Unknown or empty wines are left out.",
@@ -284,6 +288,26 @@ async function cellarStats(): Promise<ReadOutcome> {
   };
 }
 
+async function tasteProfile(): Promise<ReadOutcome> {
+  const profile = await getTasteProfile();
+  const points = (list: { label: string; count: number; averageRating: number }[]) =>
+    list.map((f) => ({ label: f.label, wines: f.count, averageRating: f.averageRating }));
+  return {
+    content: json({
+      enoughData: profile.enoughData,
+      ratedWines: profile.ratedWines,
+      averageRating: profile.averageRating,
+      favouriteColours: points(profile.colours),
+      favouriteCountries: points(profile.countries),
+      favouriteRegions: points(profile.regions),
+      favouriteGrapes: points(profile.grapes),
+    }),
+    isError: false,
+    chip: "Checked taste profile",
+    wineIds: [],
+  };
+}
+
 async function consumptionHistory(input: Input<"get_consumption_history">): Promise<ReadOutcome> {
   const all = input.wineId
     ? await db.consumptions.where("wineId").equals(input.wineId).toArray()
@@ -373,6 +397,8 @@ export async function runReadTool(name: ReadToolName, rawInput: unknown): Promis
         return await listWishlist();
       case "cellar_stats":
         return await cellarStats();
+      case "get_taste_profile":
+        return await tasteProfile();
       case "get_consumption_history":
         return await consumptionHistory(parsed.data as Input<"get_consumption_history">);
       case "show_bottles":
