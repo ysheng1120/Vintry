@@ -290,9 +290,10 @@ export async function getHomeSections(year: number = currentYear()): Promise<Hom
   >;
   for (const row of inCellar) byStatus[row.status] += 1;
 
-  const openLots = data.lots.filter(
-    (l) => l.quantity > 0 && inCellar.some((r) => r.wine.id === l.wineId),
-  );
+  // A Set lookup keeps this a single pass over the lots table instead of scanning every
+  // in-cellar wine for each lot (O(lots) rather than O(lots * wines)).
+  const cellarWineIds = new Set(inCellar.map((r) => r.wine.id));
+  const openLots = data.lots.filter((l) => l.quantity > 0 && cellarWineIds.has(l.wineId));
   const valued = inCellar.flatMap((row) => {
     const value = wineValue(row.wine);
     return value ? [{ row, value }] : [];

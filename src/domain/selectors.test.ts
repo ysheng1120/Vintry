@@ -330,6 +330,34 @@ describe("home sections", () => {
     expect(home.valuedWines).toBe(0);
   });
 
+  it("counts open lots only for wines still in the cellar", async () => {
+    // Ridge over two lots, Latour untouched, and a fully-drunk wine whose closed lot must not
+    // count: a regression guard for computing this with a Set lookup instead of a nested scan.
+    await addBottles({
+      drafts: [
+        {
+          producer: "Ridge",
+          vintage: 2019,
+          colour: "red" as const,
+          lots: [{ quantity: 3 }, { quantity: 2 }],
+        },
+        { producer: "Latour", vintage: 2015, colour: "red" as const, lots: [{ quantity: 1 }] },
+        {
+          producer: "Drunk Estate",
+          vintage: 2010,
+          colour: "red" as const,
+          lots: [{ quantity: 1 }],
+        },
+      ],
+    });
+    const drunkEstate = (await db.wines.where("producer").equals("Drunk Estate").first())!;
+    await db.lots.where("wineId").equals(drunkEstate.id).modify({ quantity: 0 });
+
+    const home = await getHomeSections(YEAR);
+    expect(home.counts.wines).toBe(2);
+    expect(home.counts.openLots).toBe(3);
+  });
+
   it("lists wines coming into their window this year or next", async () => {
     await seed();
     const home = await getHomeSections(2027);

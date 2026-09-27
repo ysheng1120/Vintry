@@ -24,6 +24,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       "Stats shows what you spent on wine each year.",
       "On Locations, open a location to see its bottles, bin by bin.",
       "Merge two records of the same wine from the wine's page. Bottles, drinks, and notes move over, and you can undo it.",
+      "Buy again puts a wine on your wishlist in one click, and Home lists your last bottles of wines you love.",
+      "Large cellars open faster: the cellar list shows 100 wines at a time, with Show more.",
     ],
   },
   {

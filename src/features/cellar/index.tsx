@@ -42,6 +42,12 @@ const STATUS_CHIPS: WindowStatus[] = ["ready", "drink-soon", "hold", "past-peak"
 /** Search written by this page carries this state, so typing is not undone by the URL sync. */
 const FROM_SEARCH = { cellarSearch: true };
 
+/**
+ * With thousands of wines, mounting every row at once is what makes the list slow to paint.
+ * Only the first page renders; "Show more" reveals the rest in the same-size chunks (R3).
+ */
+const ROWS_PER_PAGE = 100;
+
 /** The cellar list (R3, R5): search, filters and sort, all kept in the URL. */
 export default function CellarPage() {
   const [params, setParams] = useSearchParams();
@@ -91,6 +97,16 @@ export default function CellarPage() {
     // `filters` is derived from `params`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows, params, search]);
+
+  // Only the first page of the (possibly long) filtered list is mounted; a new search, filter or
+  // sort starts back at the first page rather than keeping however many rows were shown before
+  // (the same during-render comparison `syncedKey` above uses, so this needs no extra effect).
+  const [rowsShown, setRowsShown] = useState(ROWS_PER_PAGE);
+  const [pagedView, setPagedView] = useState(view);
+  if (pagedView !== view) {
+    setPagedView(view);
+    setRowsShown(ROWS_PER_PAGE);
+  }
 
   const loadSample = async () => {
     setLoadingSample(true);
@@ -362,13 +378,26 @@ export default function CellarPage() {
             />
           )
         ) : (
-          <ul aria-label="Wines" className="flex flex-col gap-2">
-            {visible.map((row) => (
-              <li key={row.wine.id}>
-                <CellarRowLink row={row} />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul id="cellar-wine-list" aria-label="Wines" className="flex flex-col gap-2">
+              {visible.slice(0, rowsShown).map((row) => (
+                <li key={row.wine.id}>
+                  <CellarRowLink row={row} />
+                </li>
+              ))}
+            </ul>
+            {rowsShown < visible.length && (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  variant="secondary"
+                  aria-controls="cellar-wine-list"
+                  onClick={() => setRowsShown((n) => Math.min(n + ROWS_PER_PAGE, visible.length))}
+                >
+                  Show more ({visible.length - rowsShown} more)
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
       <PrintableCellarTable rows={visible} />
