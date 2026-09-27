@@ -12,6 +12,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import type { CommandResult } from "../../domain/commands";
 import { prepareLabelImage, type PreparedImage } from "../../lib/image";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
+import BatchScan from "./BatchScan";
 import { DraftCard } from "./DraftCard";
 import type { BottleDraft } from "./draft";
 
@@ -21,7 +22,9 @@ type Phase =
   | { kind: "pick" }
   | { kind: "preview"; image: PreparedImage }
   | { kind: "reading"; image: PreparedImage }
-  | { kind: "draft"; draft: BottleDraft };
+  | { kind: "draft"; draft: BottleDraft }
+  /** Two or more photos chosen at once: read and saved one by one in BatchScan. */
+  | { kind: "batch"; files: File[] };
 
 const hasCameraApi = () =>
   typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
@@ -78,6 +81,15 @@ export default function ScanPage() {
     void navigate(wineId ? `/wine/${wineId}` : "/cellar");
   };
 
+  const onFiles = (files: File[]) => {
+    if (files.length < 2) {
+      if (files[0]) void takePhoto(files[0]);
+      return;
+    }
+    setError(null);
+    setPhase({ kind: "batch", files });
+  };
+
   let body;
   if (phase.kind === "draft") {
     body = (
@@ -90,6 +102,14 @@ export default function ScanPage() {
     );
   } else if (status.state !== "ready") {
     body = <AiStatusNotice status={status} manual={MANUAL} />;
+  } else if (phase.kind === "batch") {
+    body = (
+      <BatchScan
+        files={phase.files}
+        onScanMore={() => setPhase({ kind: "pick" })}
+        onDone={() => void navigate("/cellar")}
+      />
+    );
   } else {
     const image = phase.kind === "pick" ? null : phase.image;
     body = (
@@ -116,11 +136,7 @@ export default function ScanPage() {
             }}
           />
         ) : (
-          <DropZone
-            onFile={(file) => void takePhoto(file)}
-            cameraState={camera}
-            onOpenCamera={() => setCamera("open")}
-          />
+          <DropZone onFiles={onFiles} cameraState={camera} onOpenCamera={() => setCamera("open")} />
         )}
       </div>
     );
@@ -139,11 +155,11 @@ export default function ScanPage() {
 }
 
 function DropZone({
-  onFile,
+  onFiles,
   cameraState,
   onOpenCamera,
 }: {
-  onFile: (file: File) => void;
+  onFiles: (files: File[]) => void;
   cameraState: "closed" | "open" | "unavailable";
   onOpenCamera: () => void;
 }) {
@@ -151,8 +167,8 @@ function DropZone({
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setOver(false);
-    const file = event.dataTransfer.files[0];
-    if (file) onFile(file);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length) onFiles(files);
   };
   return (
     <div
@@ -171,7 +187,8 @@ function DropZone({
       <div>
         <p className="font-medium text-ink">Drop a photo of the front label here</p>
         <p className="mt-1 text-sm text-ink-muted">
-          A sharp, well-lit photo of the whole label works best.
+          A sharp, well-lit photo of the whole label works best. Choose several at once to add a
+          whole case in one go.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
@@ -187,11 +204,12 @@ function DropZone({
           <input
             type="file"
             accept="image/*"
+            multiple
             className="sr-only"
             onChange={(event) => {
-              const file = event.target.files?.[0];
+              const files = Array.from(event.target.files ?? []);
               event.target.value = "";
-              if (file) onFile(file);
+              if (files.length) onFiles(files);
             }}
           />
         </label>

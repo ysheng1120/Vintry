@@ -181,6 +181,24 @@ describe("Scan a label", () => {
     expect(screen.getByRole("button", { name: "Read label" })).toBeEnabled();
   });
 
+  it("opens the batch view when several photos are chosen at once", async () => {
+    await saveApiKey("sk-ant-test");
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    URL.revokeObjectURL = vi.fn();
+    const { user } = renderScan();
+
+    const input = await screen.findByLabelText("Choose photo");
+    await user.upload(input, [
+      new File(["a"], "a.jpg", { type: "image/jpeg" }),
+      new File(["b"], "b.jpg", { type: "image/jpeg" }),
+    ]);
+
+    expect(
+      await screen.findByText("This sends 2 photos to Claude with your key."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Read 2 labels" })).toBeInTheDocument();
+  });
+
   it("hides the camera button with a note when camera access is refused", async () => {
     await saveApiKey("sk-ant-test");
     // jsdom has no camera API; add one that refuses access.

@@ -20,6 +20,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     headline: "About this wine, your year in wine, what is in each bin, and merging duplicates.",
     changes: [
       "About this wine: with an AI key, get a short profile of any wine, with food pairings and serving tips.",
+      "Scan up to 12 labels at once: choose several photos and check each wine before you save it.",
       "Stats has a Year in wine recap: bottles bought and drunk, money spent, and your top wines.",
       "Stats shows what you spent on wine each year.",
       "On Locations, open a location to see its bottles, bin by bin.",

@@ -30,7 +30,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         kind: "list",
         items: [
-          "Scan a label: take or upload a photo, and Vintry fills in the details.",
+          "Scan a label: take or upload a photo, and Vintry fills in the details. Choose or drop several label photos at once to scan a whole case in one go.",
           "Describe it: type one sentence, like “6 bottles of 2019 Ridge Monte Bello at $250 from K&L”.",
           "Add by hand: a short form. It works offline and without an AI key.",
           "Import a file: bring in a CSV from CellarTracker, Vivino, or a spreadsheet.",
