@@ -93,7 +93,7 @@ describe("ImportPage", () => {
     await userEvent.selectOptions(screen.getByLabelText("Default location"), "Kitchen rack");
     await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
 
-    expect(await screen.findByText(/2 wines will be added/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 wines will be imported/)).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getByText("Ridge Monte Bello 2019")).toBeInTheDocument();
 
@@ -139,6 +139,53 @@ describe("ImportPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByText("Default currency");
     await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
-    expect(await screen.findByText(/1 wine will be added, 1 row skipped/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 wine will be imported, 1 row skipped/)).toBeInTheDocument();
+  });
+
+  async function chooseAndMapSmallFile() {
+    await chooseFile("Producer,Wine,Vintage,Color\nRidge,Monte Bello,2019,Red\n", "small.csv");
+    await screen.findByText(/Generic CSV/);
+    await userEvent.selectOptions(await screen.findByLabelText(/^Producer/), "Producer");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByText("Default currency");
+    await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+  }
+
+  it("importing the same small CSV twice shows the notice and imports 0 rows by default", async () => {
+    renderPage();
+    await chooseAndMapSmallFile();
+    await userEvent.click(await screen.findByRole("button", { name: /Import 1 wine/ }));
+    await waitFor(async () => expect(await db.wines.count()).toBe(1));
+
+    await userEvent.click(screen.getByRole("button", { name: "Import another file" }));
+    await chooseAndMapSmallFile();
+
+    expect(await screen.findByText(/This file looks already imported\./)).toBeInTheDocument();
+    expect(screen.getByText("Already in your cellar")).toBeInTheDocument();
+    const importButton = screen.getByRole("button", { name: "Import 0 wines" });
+    expect(importButton).toBeDisabled();
+
+    await userEvent.click(importButton);
+    expect(await db.wines.count()).toBe(1);
+    expect(await db.lots.count()).toBe(1);
+  });
+
+  it("importing a row anyway after the notice adds it as a second lot", async () => {
+    renderPage();
+    await chooseAndMapSmallFile();
+    await userEvent.click(await screen.findByRole("button", { name: /Import 1 wine/ }));
+    await waitFor(async () => expect(await db.wines.count()).toBe(1));
+
+    await userEvent.click(screen.getByRole("button", { name: "Import another file" }));
+    await chooseAndMapSmallFile();
+    await screen.findByText(/This file looks already imported\./);
+
+    await userEvent.click(screen.getByRole("button", { name: "Include them anyway" }));
+    const importButton = await screen.findByRole("button", { name: "Import 1 wine" });
+    expect(importButton).not.toBeDisabled();
+    await userEvent.click(importButton);
+
+    await waitFor(async () => expect(await db.lots.count()).toBe(2));
+    expect(await db.wines.count()).toBe(1);
   });
 });

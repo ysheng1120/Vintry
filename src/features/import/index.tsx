@@ -10,12 +10,14 @@ import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Select } from "../../components/ui/Select";
+import { db } from "../../db/db";
 import { createLocation, importRows } from "../../domain/commands";
 import { normalizeName } from "../../domain/match";
 import { useLocations } from "../../domain/selectors";
 import { parseCsvFile } from "../../lib/csv";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { NEW_LOCATION } from "../add/draft";
+import { findDuplicateRowIndexes, shouldImportRow, type ExistingCellar } from "./duplicates";
 import { MappingEditor } from "./MappingEditor";
 import { detectImportSource, presetMapping, type CsvMapping, type ImportSourceId } from "./presets";
 import { buildImportRows, type ImportPreview } from "./rows";
@@ -55,11 +57,22 @@ export default function ImportPage() {
   const [currency, setCurrency] = useState("GBP");
 
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [duplicateRowIndexes, setDuplicateRowIndexes] = useState<Set<number>>(new Set());
+  const [includedDuplicates, setIncludedDuplicates] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const duplicateCount = duplicateRowIndexes.size;
+  // "Looks already imported" only when every row that would otherwise be added is a duplicate.
+  const allRowsDuplicate =
+    !!preview && preview.drafts.length > 0 && duplicateCount === preview.drafts.length;
+  const willImportCount = preview
+    ? preview.rows.filter((row) => shouldImportRow(row, duplicateRowIndexes, includedDuplicates))
+        .length
+    : 0;
 
   async function handleFile(file: File) {
     setFileError(null);
@@ -115,22 +128,43 @@ export default function ImportPage() {
     setStep("defaults");
   }
 
-  function buildPreview(defaultLocationId: string | null) {
+  /** The live cellar a preview checks rows against, so a re-import of the same rows can be spotted. */
+  async function loadExistingCellar(): Promise<ExistingCellar> {
+    const [wines, lots] = await Promise.all([db.wines.toArray(), db.lots.toArray()]);
+    return { wines, lots, locations: locations?.map((l) => ({ id: l.id, name: l.name })) ?? [] };
+  }
+
+  async function buildPreview(defaultLocationId: string | null) {
     if (!parsed) return;
-    setPreview(
-      buildImportRows(parsed.rows, {
-        source,
-        mapping,
-        defaultLocationId,
-        defaultCurrency: currency.trim().toUpperCase() || null,
-        locations: locations?.map((l) => ({ id: l.id, name: l.name })),
-      }),
-    );
+    const built = buildImportRows(parsed.rows, {
+      source,
+      mapping,
+      defaultLocationId,
+      defaultCurrency: currency.trim().toUpperCase() || null,
+      locations: locations?.map((l) => ({ id: l.id, name: l.name })),
+    });
+    const cellar = await loadExistingCellar();
+    setPreview(built);
+    setDuplicateRowIndexes(findDuplicateRowIndexes(built.rows, cellar));
+    setIncludedDuplicates(new Set());
     setStep("preview");
   }
 
   function goToPreview() {
-    buildPreview(locationMode === "existing" ? existingLocationId || null : null);
+    void buildPreview(locationMode === "existing" ? existingLocationId || null : null);
+  }
+
+  function toggleIncluded(rowIndex: number, include: boolean) {
+    setIncludedDuplicates((current) => {
+      const next = new Set(current);
+      if (include) next.add(rowIndex);
+      else next.delete(rowIndex);
+      return next;
+    });
+  }
+
+  function includeAllDuplicates() {
+    setIncludedDuplicates(new Set(duplicateRowIndexes));
   }
 
   async function handleImport() {
@@ -163,10 +197,25 @@ export default function ImportPage() {
         setImportError("Nothing to import: every row is missing a producer.");
         return;
       }
-      const result = await importRows({ rows: finalPreview.drafts });
+      const keptRows = finalPreview.rows.filter((row) =>
+        shouldImportRow(row, duplicateRowIndexes, includedDuplicates),
+      );
+      if (keptRows.length === 0) {
+        setImportError("Nothing to import: every row already looks like it's in your cellar.");
+        return;
+      }
+      const result = await importRows({ rows: keptRows.map((row) => row.draft!) });
+      const leftOut = [...duplicateRowIndexes].filter((i) => !includedDuplicates.has(i)).length;
       setSummary(result.summary);
       setStep("done");
-      done(result, { description: `${finalPreview.skippedCount} rows were skipped.` });
+      done(result, {
+        description: [
+          finalPreview.skippedCount > 0 && `${finalPreview.skippedCount} rows were skipped.`,
+          leftOut > 0 && `${leftOut} rows already in your cellar were left out.`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      });
     } catch (error) {
       setImportError(errorMessage(error));
       failed(error, "Import didn't finish");
@@ -186,6 +235,8 @@ export default function ImportPage() {
     setExistingLocationId("");
     setNewLocationName("");
     setPreview(null);
+    setDuplicateRowIndexes(new Set());
+    setIncludedDuplicates(new Set());
     setImportError(null);
     setSummary(null);
   }
@@ -308,8 +359,31 @@ export default function ImportPage() {
 
       {step === "preview" && preview && (
         <Card padding="lg" className="space-y-6">
+          {duplicateCount > 0 && (
+            <div className="space-y-2 rounded-xl border border-warning-soft bg-warning-soft/40 p-4 text-sm text-ink">
+              <p>
+                {allRowsDuplicate ? (
+                  "This file looks already imported."
+                ) : (
+                  <>
+                    {duplicateCount} of {preview.rows.length}{" "}
+                    {preview.rows.length === 1 ? "row" : "rows"} look already in your cellar.
+                  </>
+                )}{" "}
+                They are left out.{" "}
+                <button
+                  type="button"
+                  onClick={includeAllDuplicates}
+                  disabled={includedDuplicates.size === duplicateCount}
+                  className="font-medium text-primary underline underline-offset-2 disabled:cursor-not-allowed disabled:text-ink-subtle disabled:no-underline"
+                >
+                  Include them anyway
+                </button>
+              </p>
+            </div>
+          )}
           <p className="text-lg font-medium text-ink">
-            {preview.includedCount} {preview.includedCount === 1 ? "wine" : "wines"} will be added
+            {willImportCount} {willImportCount === 1 ? "wine" : "wines"} will be imported
             {preview.skippedCount > 0 &&
               `, ${preview.skippedCount} ${preview.skippedCount === 1 ? "row" : "rows"} skipped`}
             .
@@ -322,31 +396,60 @@ export default function ImportPage() {
                   <th className="px-3 py-2 font-medium">Wine</th>
                   <th className="px-3 py-2 font-medium">Qty</th>
                   <th className="px-3 py-2 font-medium">Notes</th>
+                  <th className="px-3 py-2 font-medium">Include anyway</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.slice(0, 20).map((row) => (
-                  <tr key={row.rowIndex} className={row.draft ? undefined : "bg-danger-soft/40"}>
-                    <td className="px-3 py-2 tabular-nums text-ink-subtle">{row.rowIndex + 1}</td>
-                    <td className="px-3 py-2">
-                      {row.draft ? describeWineForRow(row.draft) : "(skipped)"}
-                    </td>
-                    <td className="px-3 py-2 tabular-nums">
-                      {row.draft?.lots?.[0]?.quantity ?? "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.issues.map((issue) => (
-                        <Badge
-                          key={issue.message}
-                          tone={issue.kind === "skipped" ? "danger" : "warning"}
-                          className="mr-1 mb-1"
-                        >
-                          {issue.message}
-                        </Badge>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
+                {preview.rows.slice(0, 20).map((row) => {
+                  const isDuplicate = duplicateRowIndexes.has(row.rowIndex);
+                  return (
+                    <tr
+                      key={row.rowIndex}
+                      className={
+                        !row.draft
+                          ? "bg-danger-soft/40"
+                          : isDuplicate
+                            ? "bg-warning-soft/20"
+                            : undefined
+                      }
+                    >
+                      <td className="px-3 py-2 tabular-nums text-ink-subtle">{row.rowIndex + 1}</td>
+                      <td className="px-3 py-2">
+                        {row.draft ? describeWineForRow(row.draft) : "(skipped)"}
+                        {isDuplicate && (
+                          <Badge tone="warning" className="ml-2">
+                            Already in your cellar
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {row.draft?.lots?.[0]?.quantity ?? "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.issues.map((issue) => (
+                          <Badge
+                            key={issue.message}
+                            tone={issue.kind === "skipped" ? "danger" : "warning"}
+                            className="mr-1 mb-1"
+                          >
+                            {issue.message}
+                          </Badge>
+                        ))}
+                      </td>
+                      <td className="px-3 py-2">
+                        {isDuplicate && (
+                          <input
+                            type="checkbox"
+                            checked={includedDuplicates.has(row.rowIndex)}
+                            onChange={(e) => toggleIncluded(row.rowIndex, e.target.checked)}
+                            className="size-4 accent-primary"
+                            aria-label={`Include row ${row.rowIndex + 1} anyway`}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -368,9 +471,9 @@ export default function ImportPage() {
               type="button"
               onClick={handleImport}
               loading={importing}
-              disabled={preview.includedCount === 0}
+              disabled={willImportCount === 0}
             >
-              Import {preview.includedCount} {preview.includedCount === 1 ? "wine" : "wines"}
+              Import {willImportCount} {willImportCount === 1 ? "wine" : "wines"}
             </Button>
           </div>
         </Card>
