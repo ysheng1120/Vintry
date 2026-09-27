@@ -25,8 +25,22 @@ import { pluralize } from "../../lib/format";
 
 const bottleValue = (v: number) => pluralize(v, "bottle");
 
+// Written out in full (not built with a template literal) so Tailwind's scanner can see each
+// class name literally and generate its CSS; a dynamic `fill-wine-${key}` only ever produced
+// `fill-wine-red` (the one spelled out elsewhere, in BarChart.test.tsx), leaving every other
+// wine colour's bar with the SVG default black fill.
+const COLOUR_FILL: Record<string, string> = {
+  red: "fill-wine-red",
+  white: "fill-wine-white",
+  rose: "fill-wine-rose",
+  sparkling: "fill-wine-sparkling",
+  dessert: "fill-wine-dessert",
+  fortified: "fill-wine-fortified",
+  orange: "fill-wine-orange",
+};
+
 function withColourFill(points: SeriesPoint[]): BarChartDatum[] {
-  return points.map((p) => ({ ...p, className: `fill-wine-${p.key}` }));
+  return points.map((p) => ({ ...p, className: COLOUR_FILL[p.key] ?? "fill-primary" }));
 }
 
 const STATUS_FILL: Record<string, string> = {
