@@ -2,7 +2,12 @@ import { db } from "../../db/db";
 import { currentYear, now } from "../../domain/clock";
 import { COLOUR_LABELS, type Location, type Lot, type Wine } from "../../domain/types";
 import { wineLabel } from "../../domain/labels";
-import { WINDOW_STATUSES, WINDOW_STATUS_LABELS, windowStatus } from "../../domain/window";
+import {
+  WINDOW_STATUSES,
+  WINDOW_STATUS_LABELS,
+  windowRange,
+  windowStatus,
+} from "../../domain/window";
 import { toIsoDate } from "../../lib/format";
 
 /**
@@ -20,7 +25,7 @@ export interface ScreenContext {
 
 function windowText(wine: Wine): string {
   if (wine.windowFrom === null && wine.windowTo === null) return "none";
-  const range = `${wine.windowFrom ?? "…"}–${wine.windowTo ?? "…"}`;
+  const range = windowRange(wine.windowFrom, wine.windowTo);
   return wine.windowSource === "ai" ? `${range} (AI estimate)` : range;
 }
 

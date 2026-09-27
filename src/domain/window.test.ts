@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { windowStatus, WINDOW_STATUS_LABELS } from "./window";
+import { windowRange, windowStatus, WINDOW_STATUS_LABELS } from "./window";
 
 const w = (windowFrom: number | null, windowTo: number | null) => ({ windowFrom, windowTo });
 
@@ -23,5 +23,13 @@ describe("windowStatus", () => {
   it("has a label for every status", () => {
     expect(WINDOW_STATUS_LABELS["drink-soon"]).toBe("Drink soon");
     expect(WINDOW_STATUS_LABELS.none).toBe("No window");
+  });
+});
+
+describe("windowRange", () => {
+  it("writes both ends, with an ellipsis for an open end", () => {
+    expect(windowRange(2020, 2035)).toBe("2020–2035");
+    expect(windowRange(null, 2035)).toBe("…–2035");
+    expect(windowRange(2020, null)).toBe("2020–…");
   });
 });

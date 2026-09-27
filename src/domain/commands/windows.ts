@@ -2,6 +2,7 @@ import { z } from "zod";
 import { wineLabel } from "../labels";
 import { WindowSourceSchema, YearSchema } from "../types";
 import { cleanText, CommandError, defineCommand, notFound, type CommandContext } from "./core";
+import { windowRange } from "../window";
 
 const SetWindowInput = z.object({
   wineId: z.string().min(1),
@@ -41,7 +42,7 @@ export const setDrinkingWindowCommand = defineCommand({
       windowSource: cleared ? null : input.source,
       windowNote: cleared ? null : cleanText(input.note),
     });
-    const range = cleared ? "none" : `${input.from ?? "…"}–${input.to ?? "…"}`;
+    const range = cleared ? "none" : windowRange(input.from, input.to);
     return {
       summary: cleared
         ? `Cleared the drinking window for ${wineLabel(wine)}`

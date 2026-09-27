@@ -102,8 +102,6 @@ export function fakeConnectionError(): APIConnectionError {
   return new APIConnectionError({ message: "Connection error." });
 }
 
-let active: FakeAi | null = null;
-
 export function installFakeAi(): FakeAi {
   const script: Scripted[] = [];
   const requests: MessageParams[] = [];
@@ -142,16 +140,9 @@ export function installFakeAi(): FakeAi {
   };
 
   setAiTransport(transport);
-  active = fake;
   return fake;
 }
 
 export function uninstallFakeAi(): void {
   setAiTransport(null);
-  active = null;
-}
-
-/** The fake installed by the current test, if any. */
-export function currentFakeAi(): FakeAi | null {
-  return active;
 }

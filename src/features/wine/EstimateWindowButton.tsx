@@ -7,6 +7,7 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/useToast";
 import type { Wine } from "../../domain/types";
 import { useCommandFeedback } from "../../app/commandFeedback";
+import { windowRange } from "../../domain/window";
 
 const userSetWindow = (wine: Wine) =>
   wine.windowSource === "user" && (wine.windowFrom !== null || wine.windowTo !== null);
@@ -60,7 +61,7 @@ export default function EstimateWindowButton({ wine }: { wine: Wine }) {
       <ConfirmDialog
         open={confirming}
         title="Replace your window?"
-        description={`You set this window yourself (${wine.windowFrom ?? "…"}–${wine.windowTo ?? "…"}). An AI estimate would replace it. You can undo afterwards.`}
+        description={`You set this window yourself (${windowRange(wine.windowFrom, wine.windowTo)}). An AI estimate would replace it. You can undo afterwards.`}
         confirmLabel="Estimate and replace"
         onConfirm={() => void run(true)}
         onCancel={() => setConfirming(false)}

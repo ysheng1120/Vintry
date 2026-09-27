@@ -20,6 +20,7 @@ import type { Lot, Wine } from "../../domain/types";
 import { pluralize } from "../../lib/format";
 import { openLotsByWine } from "./readTools";
 import type { Proposal, ProposalKind, StoredToolResult } from "./thread";
+import { windowRange } from "../../domain/window";
 
 /**
  * Proposal tools (KTD11): each one is a registry command whose input schema becomes the tool
@@ -388,7 +389,7 @@ async function prepareUpdateWine(input: In<"propose_update_wine">): Promise<Prep
 }
 
 function rangeText(from: number | null, to: number | null): string {
-  return from === null && to === null ? "none" : `${from ?? "…"}–${to ?? "…"}`;
+  return from === null && to === null ? "none" : windowRange(from, to);
 }
 
 async function prepareSetWindow(input: In<"propose_set_drinking_window">): Promise<Prepared> {

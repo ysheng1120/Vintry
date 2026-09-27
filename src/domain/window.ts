@@ -27,3 +27,8 @@ export function windowStatus(
   if (windowTo !== null && windowTo - year <= 1) return "drink-soon";
   return "ready";
 }
+
+/** "2020–2035", with "…" for an open end: the one way a drinking window is written out. */
+export function windowRange(from: number | null, to: number | null): string {
+  return `${from ?? "…"}–${to ?? "…"}`;
+}
