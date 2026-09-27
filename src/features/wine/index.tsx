@@ -159,13 +159,6 @@ export default function WineDetailPage() {
         >
           Add note
         </Button>
-        <Button
-          variant="secondary"
-          icon={<Merge aria-hidden="true" className="size-4" />}
-          onClick={() => setSheet({ kind: "merge" })}
-        >
-          Merge with another wine
-        </Button>
         <Link
           to={`/sommelier?wine=${encodeURIComponent(wine.id)}`}
           className={buttonClasses({ variant: "secondary" })}
@@ -173,6 +166,13 @@ export default function WineDetailPage() {
           <MessageCircle aria-hidden="true" className="size-4" />
           Ask sommelier
         </Link>
+        <Button
+          variant="ghost"
+          icon={<Merge aria-hidden="true" className="size-4" />}
+          onClick={() => setSheet({ kind: "merge" })}
+        >
+          Merge<span className="sr-only"> with another wine</span>
+        </Button>
         <Button
           variant="ghost"
           className="text-danger hover:text-danger"

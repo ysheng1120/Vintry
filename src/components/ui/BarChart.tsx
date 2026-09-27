@@ -25,7 +25,7 @@ const ROW_HEIGHT = 28;
 const BAR_HEIGHT = 14;
 const CHART_WIDTH = 560;
 const LABEL_WIDTH = 148;
-const VALUE_WIDTH = 64;
+const VALUE_WIDTH = 96;
 const BAR_AREA = CHART_WIDTH - LABEL_WIDTH - VALUE_WIDTH;
 
 /**
@@ -84,9 +84,10 @@ export function BarChart({
                   className={d.className ?? barClassName}
                 />
                 <text
-                  x={LABEL_WIDTH + BAR_AREA + 8}
+                  x={CHART_WIDTH}
                   y={y + ROW_HEIGHT / 2 + 4}
                   fontSize={12}
+                  textAnchor="end"
                   className="fill-ink-muted tabular-nums"
                 >
                   {formatValue(d.value)}

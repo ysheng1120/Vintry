@@ -19,10 +19,21 @@ You can also put Vintry at your own free web address that updates itself, instal
 - **Add wine your way:** scan a label, type one sentence ("bought 6 bottles of 2019 Ridge Monte Bello at $250 each"), fill in a short form, or import a CSV from CellarTracker, Vivino, or a spreadsheet.
 - **Know what to drink:** Home shows what is ready now, what to drink soon, what is past its peak, and what has no drinking window yet.
 - **Ask the sommelier:** "What should I open with roast lamb tonight?" It answers from the bottles you actually have, and it can suggest changes that you confirm with one tap.
-- **Keep records:** drink a bottle with a rating and note, move bottles between locations, keep tasting notes, a wishlist, history, and stats.
+- **Keep records:** drink a bottle with a rating and note, move bottles between locations and bins, keep tasting notes, a wishlist, history, and stats with a yearly recap.
+- **Tidy up:** merge two records of the same wine in one step.
 - **Undo anything:** every change can be undone from the toast or from History.
 - **Stay safe:** one-click backups, reminders to back up, and restore with a safety snapshot.
 - **Works offline and without AI.** AI features switch on when you add your own Claude API key.
+
+## Screenshots
+
+These show the sample cellar that you can load on the first start.
+
+| Home                                                                                   | Cellar                                                                               |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| ![Home shows what is ready to drink now](docs/images/home-light.png)                   | ![The cellar list with filters](docs/images/cellar-light.png)                        |
+| **A wine (dark mode)**                                                                 | **Stats**                                                                            |
+| ![A wine page with its bottles, notes, and drinking window](docs/images/wine-dark.png) | ![Stats charts by colour, country, region, and vintage](docs/images/stats-light.png) |
 
 ## For developers
 
