@@ -23,6 +23,12 @@ const key = (table: string, id: string) => `${table}:${id}`;
 
 const MISSING = "This change is no longer in the history.";
 const ALREADY_UNDONE = "This change has already been undone.";
+const PERMANENT = "Wines deleted forever can't be brought back.";
+
+/** Batches that remove records for good ("Delete forever" and the 30-day purge) cannot be undone. */
+function isPermanent(batch: EventBatch): boolean {
+  return batch.command === "purgeDeleted";
+}
 
 /**
  * The most recent later, not-undone batch that stands in the way of undoing `batch` (KTD7, R6):
@@ -74,6 +80,7 @@ async function check(batchId: string): Promise<{ batch?: EventBatch; result: Und
   if (batch.undoneAt) {
     return { batch, result: { ok: false, reason: ALREADY_UNDONE } };
   }
+  if (isPermanent(batch)) return { batch, result: { ok: false, reason: PERMANENT } };
   return { batch, result: checkFor(await findBlocker(batch)) };
 }
 
@@ -108,6 +115,7 @@ export async function checkUndoAll(batches: EventBatch[]): Promise<Map<string, U
     const batch = byId.get(id);
     if (!batch) checks.set(id, { ok: false, reason: MISSING });
     else if (batch.undoneAt) checks.set(id, { ok: false, reason: ALREADY_UNDONE });
+    else if (isPermanent(batch)) checks.set(id, { ok: false, reason: PERMANENT });
     else checks.set(id, checkFor(blockerAmong(batch, stored)));
   }
   return checks;

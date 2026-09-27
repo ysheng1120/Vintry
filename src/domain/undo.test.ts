@@ -9,7 +9,7 @@ import { createLocation, deleteLocation } from "./commands/locations";
 import { moveBottles } from "./commands/lots";
 import { addTastingNote } from "./commands/notes";
 import { wipeAll } from "./commands/admin";
-import { addBottles, deleteWine } from "./commands/wines";
+import { addBottles, deleteWine, purgeDeleted } from "./commands/wines";
 import { checkUndo, checkUndoAll, undoBatch } from "./undo";
 
 async function seedLotOfSix() {
@@ -224,5 +224,26 @@ describe("checkUndoAll", () => {
 
   it("returns an empty map for no batches", async () => {
     expect((await checkUndoAll([])).size).toBe(0);
+  });
+});
+
+describe("permanent removal", () => {
+  beforeEach(resetDatabase);
+
+  it("does not let Undo bring back a wine that was deleted forever", async () => {
+    const added = await addBottles({
+      drafts: [{ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 2 }] }],
+    });
+    const wineId = added.touched.wineIds[0]!;
+    await deleteWine({ wineId });
+    const purged = await purgeDeleted({ wineId });
+
+    const check = await checkUndo(purged.batchId!);
+    expect(check.ok).toBe(false);
+    expect(
+      (await checkUndoAll([(await db.eventBatches.get(purged.batchId!))!])).get(purged.batchId!),
+    ).toEqual(check);
+    expect((await undoBatch(purged.batchId!)).ok).toBe(false);
+    expect(await db.wines.get(wineId)).toBeUndefined();
   });
 });

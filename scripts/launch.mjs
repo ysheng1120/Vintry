@@ -63,7 +63,8 @@ function portInUse() {
 
 async function isVintryRunning() {
   try {
-    const response = await fetch(URL);
+    // A program that accepts the connection but never answers must not hang the launcher.
+    const response = await fetch(URL, { signal: AbortSignal.timeout(3000) });
     return (await response.text()).includes("<title>Vintry");
   } catch {
     return false;
