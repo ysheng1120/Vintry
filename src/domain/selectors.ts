@@ -3,7 +3,7 @@ import { db } from "../db/db";
 import { currentYear, nowIso } from "./clock";
 import { PURGE_AFTER_DAYS } from "./commands/wines";
 import { normalizeName } from "./match";
-import { sumByCurrency, type CurrencyTotal } from "./money";
+import { sumByCurrency, wineValue, type CurrencyTotal } from "./money";
 import {
   COLOUR_LABELS,
   COLOURS,
@@ -265,6 +265,13 @@ export interface HomeSections {
   counts: CellarCounts;
   /** Cost of bottles in the cellar, one total per currency (never converted). */
   costByCurrency: CurrencyTotal[];
+  /**
+   * The collector's own values for the bottles in the cellar, one total per currency (never
+   * converted). Only wines with a value count.
+   */
+  valueByCurrency: CurrencyTotal[];
+  /** Wines in the cellar that have a value (out of `counts.wines`). */
+  valuedWines: number;
   sampleLoaded: boolean;
   /** No wines at all, not even drunk ones. */
   isEmpty: boolean;
@@ -286,6 +293,10 @@ export async function getHomeSections(year: number = currentYear()): Promise<Hom
   const openLots = data.lots.filter(
     (l) => l.quantity > 0 && inCellar.some((r) => r.wine.id === l.wineId),
   );
+  const valued = inCellar.flatMap((row) => {
+    const value = wineValue(row.wine);
+    return value ? [{ row, value }] : [];
+  });
   return {
     ready: withStatus("ready"),
     drinkSoon: withStatus("drink-soon"),
@@ -309,6 +320,13 @@ export async function getHomeSections(year: number = currentYear()): Promise<Hom
         currency: l.currency,
       })),
     ),
+    valueByCurrency: sumByCurrency(
+      valued.map(({ row, value }) => ({
+        amount: value.amount * row.bottles,
+        currency: value.currency,
+      })),
+    ),
+    valuedWines: valued.length,
     sampleLoaded: data.wines.some((w) => w.isSample),
     isEmpty: data.wines.length === 0,
   };

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
+import { exportBackup, parseBackup } from "../../db/backup";
 import { getSetting } from "../../db/settings";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../clock";
 import { getCellarList } from "../selectors";
+import { undoBatch } from "../undo";
 import { CommandError } from "./core";
 import { addBottles, deleteWine, importRows, purgeDeleted, restoreWine, updateWine } from "./wines";
 
@@ -243,5 +245,106 @@ describe("deleteWine, restoreWine and purgeDeleted", () => {
     const result = await purgeDeleted({});
     expect(result.batchId).toBeNull();
     expect(await db.eventBatches.count()).toBe(0);
+  });
+});
+
+describe("updateWine: market value (collector-entered only)", () => {
+  beforeEach(resetDatabase);
+
+  async function oneWine() {
+    await addBottles({ drafts: [{ ...monteBello, lots: [{ quantity: 2 }] }] });
+    return (await db.wines.toArray())[0]!;
+  }
+
+  it("new and older wines have no value", async () => {
+    const wine = await oneWine();
+    expect(wine).toMatchObject({ valuePerBottle: null, valueCurrency: null, valueUpdatedAt: null });
+  });
+
+  it("sets the value per bottle with its currency and stamps when it was updated", async () => {
+    const wine = await oneWine();
+    setClock("2026-09-03T10:00:00Z");
+    await updateWine({ wineId: wine.id, patch: { valuePerBottle: 120, valueCurrency: "GBP" } });
+    expect(await db.wines.get(wine.id)).toMatchObject({
+      valuePerBottle: 120,
+      valueCurrency: "GBP",
+      valueUpdatedAt: "2026-09-03T10:00:00.000Z",
+    });
+  });
+
+  it("re-stamps only when the value changes, and clearing the value clears its currency", async () => {
+    const wine = await oneWine();
+    setClock("2026-09-03T10:00:00Z");
+    await updateWine({ wineId: wine.id, patch: { valuePerBottle: 120, valueCurrency: "GBP" } });
+    setClock("2026-09-10T10:00:00Z");
+    await updateWine({ wineId: wine.id, patch: { region: "Cupertino" } });
+    expect((await db.wines.get(wine.id))?.valueUpdatedAt).toBe("2026-09-03T10:00:00.000Z");
+
+    setClock("2026-09-12T10:00:00Z");
+    await updateWine({ wineId: wine.id, patch: { valuePerBottle: null } });
+    const cleared = await db.wines.get(wine.id);
+    expect(cleared).toMatchObject({ valuePerBottle: null, valueCurrency: null });
+    expect(cleared?.valueUpdatedAt).toMatch(/^2026-09-12/);
+  });
+
+  it("needs a currency with a value", async () => {
+    const wine = await oneWine();
+    await expect(updateWine({ wineId: wine.id, patch: { valuePerBottle: 90 } })).rejects.toThrow(
+      /currency/i,
+    );
+    expect((await db.wines.get(wine.id))?.valuePerBottle).toBeNull();
+  });
+
+  it("refuses a value from the sommelier or any other non-user source, writing nothing", async () => {
+    const wine = await oneWine();
+    for (const source of ["ai-chat", "ai-scan", "import"] as const) {
+      await expect(
+        updateWine(
+          { wineId: wine.id, patch: { valuePerBottle: 500, valueCurrency: "USD", notes: "x" } },
+          { source },
+        ),
+      ).rejects.toThrow(CommandError);
+    }
+    expect(await db.wines.get(wine.id)).toMatchObject({ valuePerBottle: null, notes: null });
+    // Other edits from the sommelier still work.
+    await updateWine({ wineId: wine.id, patch: { notes: "Decant" } }, { source: "ai-chat" });
+    expect((await db.wines.get(wine.id))?.notes).toBe("Decant");
+  });
+
+  it("undo restores the previous value", async () => {
+    const wine = await oneWine();
+    const result = await updateWine({
+      wineId: wine.id,
+      patch: { valuePerBottle: 120, valueCurrency: "GBP" },
+    });
+    await undoBatch(result.batchId!);
+    expect(await db.wines.get(wine.id)).toMatchObject({
+      valuePerBottle: null,
+      valueCurrency: null,
+    });
+  });
+
+  it("round-trips through a backup, and older backups without a value still parse", async () => {
+    const wine = await oneWine();
+    await updateWine({ wineId: wine.id, patch: { valuePerBottle: 120, valueCurrency: "GBP" } });
+    const file = await exportBackup();
+    const parsed = parseBackup(JSON.stringify(file));
+    expect(parsed.ok && parsed.backup.data.wines[0]).toMatchObject({
+      valuePerBottle: 120,
+      valueCurrency: "GBP",
+    });
+
+    const older = structuredClone(file);
+    for (const row of older.data.wines as Record<string, unknown>[]) {
+      delete row.valuePerBottle;
+      delete row.valueCurrency;
+      delete row.valueUpdatedAt;
+    }
+    const parsedOld = parseBackup(older);
+    expect(parsedOld.ok && parsedOld.backup.data.wines[0]).toMatchObject({
+      valuePerBottle: null,
+      valueCurrency: null,
+      valueUpdatedAt: null,
+    });
   });
 });

@@ -56,3 +56,12 @@ describe("sommelierTools", () => {
     expect(JSON.stringify(sommelierTools())).not.toContain("$schema");
   });
 });
+
+describe("propose_update_wine", () => {
+  it("never offers the collector's own market value to the model", () => {
+    const tool = sommelierTools().find((t) => t.name === "propose_update_wine");
+    const text = JSON.stringify(tool?.input_schema);
+    expect(text).not.toContain("valuePerBottle");
+    expect(text).not.toContain("valueCurrency");
+  });
+});

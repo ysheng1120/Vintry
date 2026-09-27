@@ -29,3 +29,24 @@ export function sumByCurrency(
     .map(([currency, total]) => ({ currency, total: Math.round(total * 100) / 100 }))
     .sort((a, b) => b.total - a.total || a.currency.localeCompare(b.currency));
 }
+
+export interface WineValue {
+  amount: number;
+  currency: string;
+  /** When the collector last changed it (ISO date-time), if known. */
+  updatedAt: string | null;
+}
+
+/**
+ * The collector's own value per bottle for a wine, or null when there is none. Rows saved before
+ * values existed have no value fields at all, so missing counts as none.
+ */
+export function wineValue(wine: {
+  valuePerBottle?: number | null;
+  valueCurrency?: string | null;
+  valueUpdatedAt?: string | null;
+}): WineValue | null {
+  const { valuePerBottle: amount, valueCurrency: currency } = wine;
+  if (typeof amount !== "number" || !Number.isFinite(amount) || !currency) return null;
+  return { amount, currency, updatedAt: wine.valueUpdatedAt ?? null };
+}

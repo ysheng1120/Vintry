@@ -15,6 +15,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.1.0",
+    date: "2026-09-27",
+    headline: "Track what your wines are worth, and ask the sommelier in one tap.",
+    changes: [
+      "Note what a wine is worth to you, per bottle, in Edit wine. Only you set it; AI never does.",
+      "Home shows your cellar value next to what it cost, in each currency.",
+      "Wines added by scanning a label now show the label photo on their page.",
+      'Home asks "Not sure what to open tonight?" with three quick questions for the sommelier.',
+    ],
+  },
+  {
     version: "1.0.0",
     date: "2026-09-26",
     headline: "Vintry's first release.",

@@ -6,7 +6,7 @@ import { setClock } from "./clock";
 import { consumeBottles } from "./commands/consumption";
 import { createLocation } from "./commands/locations";
 import { addTastingNote } from "./commands/notes";
-import { addBottles, deleteWine } from "./commands/wines";
+import { addBottles, deleteWine, updateWine } from "./commands/wines";
 import { addWishlistItem } from "./commands/wishlist";
 import {
   getCellarList,
@@ -288,6 +288,46 @@ describe("home sections", () => {
     ]);
     expect(home.sampleLoaded).toBe(false);
     expect(home.isEmpty).toBe(false);
+  });
+
+  it("totals the collector's values per currency, counting only wines in the cellar with a value", async () => {
+    const wine = (producer: string, quantity: number) => ({
+      producer,
+      vintage: 2019,
+      colour: "red" as const,
+      lots: [{ quantity }],
+    });
+    await addBottles({
+      drafts: [wine("Ridge", 3), wine("Latour", 2), wine("Loosen", 4), wine("Drunk Estate", 1)],
+    });
+    const byProducer = new Map((await db.wines.toArray()).map((w) => [w.producer, w.id]));
+    const setValue = (producer: string, valuePerBottle: number, valueCurrency: string) =>
+      updateWine({ wineId: byProducer.get(producer)!, patch: { valuePerBottle, valueCurrency } });
+    await setValue("Ridge", 250, "USD");
+    await setValue("Latour", 600.5, "GBP");
+    await setValue("Drunk Estate", 1000, "GBP");
+    await db.lots.where("wineId").equals(byProducer.get("Drunk Estate")!).modify({ quantity: 0 });
+    // A row saved before values existed has no value fields at all.
+    await db.wines.update(byProducer.get("Loosen")!, (row) => {
+      delete (row as Partial<typeof row>).valuePerBottle;
+      delete (row as Partial<typeof row>).valueCurrency;
+      delete (row as Partial<typeof row>).valueUpdatedAt;
+    });
+
+    const home = await getHomeSections(YEAR);
+    expect(home.valueByCurrency).toEqual([
+      { currency: "GBP", total: 1201 },
+      { currency: "USD", total: 750 },
+    ]);
+    expect(home.valuedWines).toBe(2);
+    expect(home.counts.wines).toBe(3);
+  });
+
+  it("has no value totals when no wine has a value", async () => {
+    await seed();
+    const home = await getHomeSections(YEAR);
+    expect(home.valueByCurrency).toEqual([]);
+    expect(home.valuedWines).toBe(0);
   });
 
   it("lists wines coming into their window this year or next", async () => {

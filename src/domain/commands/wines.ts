@@ -14,7 +14,12 @@ import {
   notFound,
   type CommandContext,
 } from "./core";
-import { WineDraftSchema, WineFieldsSchema, type WineDraft } from "./schemas";
+import {
+  WineDraftSchema,
+  WineFieldsSchema,
+  WineValueFieldsSchema,
+  type WineDraft,
+} from "./schemas";
 import { pluralize } from "../../lib/format";
 
 type ParsedDraft = z.output<typeof WineDraftSchema>;
@@ -166,18 +171,46 @@ export const importRowsCommand = defineCommand({
 });
 
 const WINDOW_FIELDS = ["windowFrom", "windowTo"] as const;
+const VALUE_FIELDS = ["valuePerBottle", "valueCurrency"] as const;
+
+/**
+ * Applies a value edit to `next`: only the collector may set a value, a value needs a currency,
+ * clearing the value clears its currency, and a changed value records when it changed.
+ */
+function applyValueEdit(wine: Wine, next: Partial<Wine>, source: EventSource) {
+  if (!VALUE_FIELDS.some((k) => k in next)) return;
+  if (source !== "user") {
+    throw new CommandError("Only you can enter what a wine is worth.", "refused");
+  }
+  const amount = next.valuePerBottle !== undefined ? next.valuePerBottle : wine.valuePerBottle;
+  let currency = next.valueCurrency !== undefined ? next.valueCurrency : wine.valueCurrency;
+  if (amount == null) currency = null;
+  else if (!currency) {
+    throw new CommandError("Please choose a currency for the value.", "invalid-input");
+  }
+  next.valuePerBottle = amount ?? null;
+  next.valueCurrency = currency ?? null;
+  // Rows saved before values existed have no value fields; treat them as null.
+  const changed =
+    next.valuePerBottle !== (wine.valuePerBottle ?? null) ||
+    next.valueCurrency !== (wine.valueCurrency ?? null);
+  if (changed) next.valueUpdatedAt = nowIso();
+  else for (const key of VALUE_FIELDS) delete next[key];
+}
 
 export const updateWineCommand = defineCommand({
   name: "updateWine",
-  description: "Edit a wine's details (producer, name, vintage, region, grapes, notes and so on).",
+  description:
+    "Edit a wine's details (producer, name, vintage, region, grapes, notes and so on). The collector's own value per bottle can only be changed by the collector.",
   input: z.object({
     wineId: z.string().min(1),
-    patch: WineFieldsSchema.partial(),
+    patch: WineFieldsSchema.partial().extend(WineValueFieldsSchema.shape),
   }),
-  async execute({ wineId, patch }, changes) {
+  async execute({ wineId, patch }, changes, { source }) {
     const wine = await changes.get("wines", wineId);
     if (!wine || wine.deletedAt) throw notFound("wine");
     const next = cleanPatch<Wine>(patch);
+    applyValueEdit(wine, next, source);
     const windowChanged = WINDOW_FIELDS.some((k) => k in next);
     if (windowChanged) {
       const from = next.windowFrom !== undefined ? next.windowFrom : wine.windowFrom;

@@ -22,8 +22,10 @@ import { WindowBar } from "../../components/ui/WindowBar";
 import { currentYear } from "../../domain/clock";
 import { deleteWine, type CommandResult } from "../../domain/commands";
 import { bottleSizeLabel, bottles, wineLabel } from "../../domain/labels";
+import { formatMoney, wineValue } from "../../domain/money";
 import { useWineDetail, type WineDetail } from "../../domain/selectors";
-import { COLOUR_LABELS } from "../../domain/types";
+import { COLOUR_LABELS, type Wine } from "../../domain/types";
+import { formatDate } from "../../lib/format";
 import { useCommandFeedback } from "../cellar/feedback";
 import { StatusBadge, WindowSourceBadge } from "../cellar/StatusBadge";
 import { DrinkSheet } from "./DrinkSheet";
@@ -113,7 +115,17 @@ export default function WineDetailPage() {
         eyebrow={[wine.region, wine.country].filter(Boolean).join(", ") || undefined}
         title={wineLabel(wine)}
         subtitle={<WineFacts detail={detail} />}
+        actions={
+          wine.thumbnail ? (
+            <img
+              src={wine.thumbnail}
+              alt={`Label of ${wineLabel(wine)}`}
+              className="size-24 rounded-2xl border border-border object-cover shadow-card"
+            />
+          ) : undefined
+        }
       />
+      <YourValue wine={wine} />
 
       <div className="mb-6 flex flex-wrap gap-2" role="toolbar" aria-label="Wine actions">
         <Button
@@ -250,5 +262,20 @@ function WineFacts({ detail }: { detail: WineDetail }) {
       <span className="font-semibold text-ink">{bottles(detail.bottles)}</span>
       {wine.isSample && <Badge>Sample</Badge>}
     </span>
+  );
+}
+
+/** The collector's own value per bottle, when they entered one. */
+function YourValue({ wine }: { wine: Wine }) {
+  const value = wineValue(wine);
+  if (!value) return null;
+  return (
+    <p className="-mt-4 mb-6 text-sm text-ink-muted">
+      Your value:{" "}
+      <span className="font-semibold text-ink tabular-nums">
+        {formatMoney(value.amount, value.currency)}
+      </span>{" "}
+      a bottle{value.updatedAt ? `, updated ${formatDate(value.updatedAt)}` : ""}
+    </p>
   );
 }

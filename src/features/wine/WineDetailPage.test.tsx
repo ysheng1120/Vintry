@@ -2,7 +2,8 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeLocation, makeLot, makeWine, resetDatabase } from "../../db/testing";
-import { currentYear } from "../../domain/clock";
+import { currentYear, setClock } from "../../domain/clock";
+import { formatDate } from "../../lib/format";
 import { renderCellarApp } from "../cellar/testing";
 
 beforeEach(resetDatabase);
@@ -148,6 +149,74 @@ describe("Wine detail", () => {
     await user.click(within(windowSheet).getByRole("button", { name: "Save window" }));
     expect(await screen.findByText("Your window")).toBeInTheDocument();
     expect(await db.wines.get(wine.id)).toMatchObject({ windowTo: 2040, windowSource: "user" });
+  });
+
+  it("enters the collector's own value in Edit wine and shows it with the date", async () => {
+    setClock("2026-09-03T10:00:00Z");
+    const { wine } = await seedWine(6);
+    const { user } = await openWine(wine.id);
+    expect(screen.queryByText(/Your value/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const edit = screen.getByRole("dialog", { name: "Edit wine" });
+    await user.type(within(edit).getByLabelText("Value per bottle"), "abc");
+    await user.click(within(edit).getByRole("button", { name: "Save changes" }));
+    expect(await within(edit).findByText("Enter an amount like 120")).toBeInTheDocument();
+
+    const amount = within(edit).getByLabelText("Value per bottle");
+    await user.clear(amount);
+    await user.type(amount, "120");
+    const currency = within(edit).getByLabelText("Currency");
+    await user.clear(currency);
+    await user.type(currency, "gbp");
+    await user.click(within(edit).getByRole("button", { name: "Save changes" }));
+
+    const line = await screen.findByText(/Your value:/);
+    expect(line).toHaveTextContent(
+      `Your value: £120.00 a bottle, updated ${formatDate("2026-09-03T10:00:00Z")}`,
+    );
+    expect(await db.wines.get(wine.id)).toMatchObject({
+      valuePerBottle: 120,
+      valueCurrency: "GBP",
+    });
+    expect(
+      await within(notifications()).findByText("Edited Ridge Monte Bello 2019"),
+    ).toBeInTheDocument();
+    expect(await db.eventBatches.count()).toBe(1);
+  });
+
+  it("clearing the value in Edit wine removes it", async () => {
+    const { wine } = await seedWine(6);
+    await db.wines.update(wine.id, { valuePerBottle: 80, valueCurrency: "USD" });
+    const { user } = await openWine(wine.id);
+    expect(await screen.findByText(/Your value:/)).toHaveTextContent("$80.00 a bottle");
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    const edit = screen.getByRole("dialog", { name: "Edit wine" });
+    expect(within(edit).getByLabelText("Currency")).toHaveValue("USD");
+    await user.clear(within(edit).getByLabelText("Value per bottle"));
+    await user.click(within(edit).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByText(/Your value:/)).not.toBeInTheDocument());
+    expect(await db.wines.get(wine.id)).toMatchObject({
+      valuePerBottle: null,
+      valueCurrency: null,
+    });
+  });
+
+  it("shows the label photo from a scan in the header", async () => {
+    const { wine } = await seedWine(1);
+    const photo = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    await db.wines.update(wine.id, { thumbnail: photo });
+    await openWine(wine.id);
+    expect(
+      await screen.findByRole("img", { name: "Label of Ridge Monte Bello 2019" }),
+    ).toHaveAttribute("src", photo);
+  });
+
+  it("shows no label photo when the wine has none", async () => {
+    const { wine } = await seedWine(1);
+    await openWine(wine.id);
+    expect(screen.queryByRole("img", { name: /Label of/ })).not.toBeInTheDocument();
   });
 
   it("adds a tasting note", async () => {

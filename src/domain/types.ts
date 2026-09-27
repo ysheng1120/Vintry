@@ -90,6 +90,14 @@ export const WineSchema = z.object({
   rating: RatingSchema.nullable().default(null),
   tags: z.array(z.string()).default([]),
   notes: text(),
+  /**
+   * Market value per bottle, entered by the collector only (never by AI). Set with its currency;
+   * rows saved before values existed have none (read them with `wineValue`).
+   */
+  valuePerBottle: z.number().min(0).nullable().default(null),
+  valueCurrency: CurrencySchema.nullable().default(null),
+  /** When the collector last changed the value. */
+  valueUpdatedAt: text(),
   deletedAt: text(),
   isSample: z.boolean().default(false),
 });

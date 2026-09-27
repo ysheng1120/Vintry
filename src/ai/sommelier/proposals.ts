@@ -50,7 +50,10 @@ export const proposalToolSchemas = {
   propose_consume: consumeBottlesCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
   propose_move: moveBottlesCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
   propose_adjust_quantity: adjustQuantityCommand.input.omit({ lotId: true }).extend(LOT_TARGET),
-  propose_update_wine: updateWineCommand.input,
+  // The collector's own market value is never something the sommelier may propose.
+  propose_update_wine: updateWineCommand.input.extend({
+    patch: updateWineCommand.input.shape.patch.omit({ valuePerBottle: true, valueCurrency: true }),
+  }),
   propose_set_drinking_window: setDrinkingWindowCommand.input,
 } as const;
 
@@ -358,6 +361,8 @@ async function prepareUpdateWine(input: In<"propose_update_wine">): Promise<Prep
   if (!wine) return result(`No wine has id ${input.wineId}. Nothing was changed.`, true);
   const fields: Record<string, unknown> = { ...input.patch };
   delete fields.thumbnail; // a label image cannot come from chat
+  delete fields.valuePerBottle; // nor can the collector's own market value
+  delete fields.valueCurrency;
   const patch = Object.fromEntries(
     Object.entries(fields).filter(
       ([key, value]) => value !== undefined && show(value) !== show(wine[key as keyof Wine]),

@@ -55,3 +55,20 @@ export const WineDraftSchema = WineFieldsSchema.extend({
   lots: z.array(LotDraftSchema).default([]),
 });
 export type WineDraft = z.input<typeof WineDraftSchema>;
+
+/**
+ * The collector's own market value for a wine. Only `updateWine` takes it, and only from the
+ * collector: the command refuses it from AI, import, or any other source.
+ */
+export const WineValueFieldsSchema = z.object({
+  valuePerBottle: z
+    .number()
+    .min(0)
+    .nullable()
+    .optional()
+    .describe("The collector's own value per bottle. Only the collector enters this; never set it"),
+  valueCurrency: CurrencySchema.nullable()
+    .optional()
+    .describe("ISO currency code of the collector's value, for example GBP"),
+});
+export type WineValueFields = z.input<typeof WineValueFieldsSchema>;

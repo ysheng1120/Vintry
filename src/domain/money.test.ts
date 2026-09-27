@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, sumByCurrency } from "./money";
+import { formatMoney, sumByCurrency, wineValue } from "./money";
 
 describe("formatMoney", () => {
   it("uses the currency symbol from Intl", () => {
@@ -33,5 +33,23 @@ describe("sumByCurrency", () => {
         { amount: null, currency: "EUR" },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("wineValue", () => {
+  it("returns the collector's value per bottle with its currency and date", () => {
+    expect(
+      wineValue({
+        valuePerBottle: 120,
+        valueCurrency: "GBP",
+        valueUpdatedAt: "2026-09-03T10:00:00Z",
+      }),
+    ).toEqual({ amount: 120, currency: "GBP", updatedAt: "2026-09-03T10:00:00Z" });
+  });
+
+  it("treats a missing or half-entered value as no value", () => {
+    expect(wineValue({})).toBeNull();
+    expect(wineValue({ valuePerBottle: null, valueCurrency: "GBP" })).toBeNull();
+    expect(wineValue({ valuePerBottle: 120, valueCurrency: null })).toBeNull();
   });
 });

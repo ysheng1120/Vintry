@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../../components/ui/Toast";
 import { db } from "../../db/db";
 import { resetDatabase } from "../../db/testing";
-import { addBottles, deleteWine } from "../../domain/commands/wines";
+import { addBottles, deleteWine, updateWine } from "../../domain/commands/wines";
 import { setClock } from "../../domain/clock";
 import { makeLot, makeWine } from "../../db/testing";
 import HomePage from "./index";
@@ -138,6 +138,65 @@ describe("HomePage", () => {
     expect(screen.queryByText(/No drinking window yet/)).not.toBeInTheDocument();
   });
 
+  it("shows the cellar value from the collector's own values, per currency, with how many wines count", async () => {
+    await addWine({ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] });
+    await addWine({ producer: "Latour", vintage: 2010, colour: "red", lots: [{ quantity: 2 }] });
+    await addWine({ producer: "Loosen", vintage: 2021, colour: "white", lots: [{ quantity: 1 }] });
+    const ids = new Map((await db.wines.toArray()).map((w) => [w.producer, w.id]));
+    await updateWine({
+      wineId: ids.get("Ridge")!,
+      patch: { valuePerBottle: 200, valueCurrency: "USD" },
+    });
+    await updateWine({
+      wineId: ids.get("Latour")!,
+      patch: { valuePerBottle: 450, valueCurrency: "GBP" },
+    });
+
+    renderHome();
+    const value = (await screen.findByRole("heading", { name: "Cellar value" })).closest(
+      "section",
+    )!;
+    expect(within(value).getByText("$600.00")).toBeInTheDocument();
+    expect(within(value).getByText("£900.00")).toBeInTheDocument();
+    expect(
+      within(value).getByText("Based on values you entered for 2 of 3 wines."),
+    ).toBeInTheDocument();
+  });
+
+  it("has no cellar value section until a value is entered", async () => {
+    await addWine({ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] });
+    renderHome();
+    await screen.findByText(/You have 3 bottles/);
+    expect(screen.queryByRole("heading", { name: "Cellar value" })).not.toBeInTheDocument();
+  });
+
+  it("offers quick questions for the sommelier, with a note that AI needs a key", async () => {
+    await addWine({ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] });
+    renderHome();
+    const card = (
+      await screen.findByRole("heading", { name: "Not sure what to open tonight?" })
+    ).closest("section")!;
+    for (const label of ["Something to drink now", "Pair with dinner", "A bottle past its best"]) {
+      const link = within(card).getByRole("link", { name: label });
+      const href = link.getAttribute("href")!;
+      expect(href).toMatch(/^\/sommelier\?ask=/);
+      const question = new URLSearchParams(href.split("?")[1]).get("ask");
+      expect(question && question.length).toBeGreaterThan(10);
+    }
+    expect(within(card).getByRole("link", { name: "Needs an AI key" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+  });
+
+  it("hides the quick questions when no bottles are left", async () => {
+    await addWine({ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 1 }] });
+    await db.lots.toCollection().modify({ quantity: 0 });
+    renderHome();
+    await screen.findByText(/You have 0 bottles/);
+    expect(screen.queryByText("Not sure what to open tonight?")).not.toBeInTheDocument();
+  });
+
   it("renders quickly with 500 wines (Verification Contract)", async () => {
     const wines = Array.from({ length: 500 }, (_, i) =>
       makeWine({
@@ -181,6 +240,9 @@ describe("HomePage with AI ready", () => {
     );
     const estimate = await screen.findByRole("link", { name: "Estimate all with AI" });
     expect(estimate).toHaveAttribute("href", "/cellar?status=none&estimate=all");
+    // The quick questions need no key note when AI is ready.
+    expect(screen.getByRole("link", { name: "Something to drink now" })).toBeInTheDocument();
+    expect(screen.queryByText("Needs an AI key")).not.toBeInTheDocument();
     vi.doUnmock("../../ai/useAiStatus");
   });
 });
