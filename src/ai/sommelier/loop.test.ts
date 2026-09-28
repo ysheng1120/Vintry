@@ -5,8 +5,11 @@ import { consumeBottles } from "../../domain/commands";
 import type { Lot, Wine } from "../../domain/types";
 import { saveApiKey } from "../client";
 import { installFakeAi, uninstallFakeAi, type FakeAi } from "../fake";
+import { setSetting } from "../../db/settings";
+import { SETTING_KEYS } from "../../db/settingKeys";
 import {
   askInNewThread,
+  buildMessages,
   DECLINED_RESULT,
   EXPIRED_RESULT,
   expireStaleProposals,
@@ -24,7 +27,13 @@ import {
   textOf,
   toolUse,
 } from "./testing";
-import { listMessages, updateMeta, type Proposal, type ToolRecord } from "./thread";
+import {
+  listMessages,
+  updateMeta,
+  type Proposal,
+  type StoredMessage,
+  type ToolRecord,
+} from "./thread";
 
 let ai: FakeAi;
 let kitchen: ReturnType<typeof makeLocation>;
@@ -425,5 +434,73 @@ describe("requests", () => {
 
     const breakpoints = JSON.stringify(second).split('"cache_control"').length - 1;
     expect(breakpoints).toBeLessThanOrEqual(4);
+  });
+});
+
+describe("frozen system prompt", () => {
+  it("keeps a thread's system prompt the same after the currency setting changes", async () => {
+    ai.queueText("Hello!");
+    ai.queueText("Again!");
+    const { threadId, done } = await askInNewThread("Hi");
+    await done;
+    await setSetting(SETTING_KEYS.currency, "USD");
+    await sendUserMessage(threadId, "Hi again");
+
+    const [first, second] = ai.requests;
+    expect(JSON.stringify(second?.system)).toBe(JSON.stringify(first?.system));
+    const thread = await db.chatThreads.get(threadId);
+    expect(thread?.systemPrompt).toContain("GBP");
+    expect(thread?.systemPromptFrom).toBeTruthy();
+
+    // A new thread uses the new setting.
+    ai.queueText("Hi!");
+    await ask("Hello");
+    expect(JSON.stringify(ai.requests[2]?.system)).toContain("USD");
+  });
+
+  it("leaves out thinking made before the prompt was frozen, except in an open tool round", () => {
+    const row = (
+      createdAt: string,
+      role: "user" | "assistant",
+      content: StoredMessage["content"],
+      kind: string,
+    ) =>
+      ({
+        id: createdAt,
+        threadId: "t",
+        createdAt,
+        updatedAt: createdAt,
+        role,
+        content,
+        meta: { kind },
+      }) as unknown as StoredMessage;
+    const thinking = { type: "thinking", thinking: "", signature: "sig" };
+    const rows = [
+      row("2026-01-01T00:00:01.000Z", "user", "Hi", "user"),
+      row(
+        "2026-01-01T00:00:02.000Z",
+        "assistant",
+        [thinking, { type: "text", text: "Hello" }],
+        "assistant",
+      ),
+      row("2026-01-01T00:00:03.000Z", "user", "What now?", "user"),
+      row(
+        "2026-01-01T00:00:04.000Z",
+        "assistant",
+        [thinking, { type: "tool_use", id: "t1", name: "search_cellar", input: {} }],
+        "assistant",
+      ),
+    ];
+    const types = (since: string | null) =>
+      buildMessages(rows, since)
+        .filter((m) => m.role === "assistant")
+        .map((m) => (Array.isArray(m.content) ? m.content.map((b) => b.type) : []));
+
+    expect(types(null)).toEqual([
+      ["thinking", "text"],
+      ["thinking", "tool_use"],
+    ]);
+    // Frozen later: old thinking goes, but the open tool round keeps its thinking.
+    expect(types("2026-06-01T00:00:00.000Z")).toEqual([["text"], ["thinking", "tool_use"]]);
   });
 });

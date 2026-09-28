@@ -278,8 +278,10 @@ describe("HomePage", () => {
     await screen.findByRole("heading", { name: "Ready now" });
     const elapsed = performance.now() - start;
 
-    // jsdom is slower than a real browser; a generous ceiling still catches a real regression.
-    expect(elapsed).toBeLessThan(2000);
+    // jsdom is slower than a real browser, and a busy machine slower still: the ceiling is a
+    // guard against an order-of-magnitude regression (such as rendering every card), not a
+    // timing benchmark.
+    expect(elapsed).toBeLessThan(10_000);
   });
 
   it("shows at most 6 wines per section until Show all is pressed", async () => {

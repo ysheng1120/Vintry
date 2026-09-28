@@ -298,6 +298,16 @@ export type EventBatch = z.infer<typeof EventBatchSchema>;
 export const ChatThreadSchema = z.object({
   ...base,
   title: z.string().default(""),
+  /**
+   * The sommelier's system prompt, frozen when the thread first sends. Newer models tie their
+   * thinking to the exact prompt, so it must not change mid-thread. Missing on older rows.
+   */
+  systemPrompt: z.string().nullable().optional(),
+  /**
+   * When `systemPrompt` was frozen. Thinking in assistant messages from before then was made
+   * under another prompt, so it is not sent back. Missing on older rows.
+   */
+  systemPromptFrom: z.string().nullable().optional(),
 });
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 

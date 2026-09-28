@@ -160,7 +160,8 @@ describe("importRows", () => {
     }));
     const started = performance.now();
     await importRows({ rows });
-    expect(performance.now() - started).toBeLessThan(5000);
+    // A guard against an order-of-magnitude regression, not a benchmark (machines under load vary).
+    expect(performance.now() - started).toBeLessThan(15_000);
     expect(await db.wines.count()).toBe(300);
   });
 

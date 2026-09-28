@@ -11,12 +11,14 @@ import {
 } from "./models";
 
 describe("model table", () => {
-  it("offers Opus 5, Sonnet 5, and Haiku 4.5 with Opus 5 as the default", () => {
+  it("offers Opus 5, Opus 5.5, Sonnet 5, and Haiku 4.5 with Opus 5 as the default", () => {
     expect(MODELS.map((m) => m.id)).toEqual([
       "claude-opus-5",
+      "claude-opus-5-5",
       "claude-sonnet-5",
       "claude-haiku-4-5",
     ]);
+    expect(getModel("claude-opus-5-5")?.label).toBe("Newest (Claude Opus 5.5)");
     expect(DEFAULT_MODEL_ID).toBe("claude-opus-5");
     expect(getModel("claude-opus-5")?.label).toBe("Best (Claude Opus 5)");
     expect(getModel("claude-sonnet-5")?.label).toBe("Balanced (Claude Sonnet 5)");
@@ -37,6 +39,21 @@ describe("model table", () => {
 });
 
 describe("pricing", () => {
+  it("prices Opus 5.5 at $4 / $20, with cache reads at its own $0.20 rate", () => {
+    expect(priceFor("claude-opus-5-5")).toEqual({
+      inputPerMTok: 4,
+      outputPerMTok: 20,
+      cacheReadPerMTok: 0.2,
+    });
+    expect(
+      estimateCostUsd("claude-opus-5-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1e6 }),
+    ).toBe(0.2);
+    // Other models keep the tenth-of-input cache-read rate.
+    expect(
+      estimateCostUsd("claude-opus-5", { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1e6 }),
+    ).toBe(0.5);
+  });
+
   it("prices 1,000 input and 500 output tokens on Opus 5 at $0.0175", () => {
     expect(estimateCostUsd("claude-opus-5", { inputTokens: 1000, outputTokens: 500 })).toBe(0.0175);
   });

@@ -2,14 +2,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { exportBackup } from "../db/backup";
 import { db } from "../db/db";
 import { resetDatabase } from "../db/testing";
+import { getModel } from "./models";
 import {
   apiKeyHint,
+  buildParams,
   createAnthropicClient,
   getSelectedModel,
   removeApiKey,
   saveApiKey,
   sendMessage,
   testApiKey,
+  type AiRequest,
 } from "./client";
 import { fakeApiError, installFakeAi, uninstallFakeAi, type FakeAi } from "./fake";
 
@@ -87,5 +90,31 @@ describe("sendMessage", () => {
     expect(chunks.join("")).toBe("Open the 2015 Barolo.");
     expect(message.content[0]).toMatchObject({ type: "text", text: "Open the 2015 Barolo." });
     expect(ai.requests[0]?.output_config).toEqual({ effort: "medium" });
+  });
+});
+
+describe("buildParams", () => {
+  const request: AiRequest = { feature: "key-test", messages: [], noThinking: true };
+
+  it("turns thinking off on Opus 5 for a trivial request", () => {
+    const params = buildParams(getModel("claude-opus-5")!, request);
+    expect(params.thinking).toEqual({ type: "disabled" });
+  });
+
+  it("never sends thinking disabled to Opus 5.5, which always thinks: it asks for low effort", () => {
+    const params = buildParams(getModel("claude-opus-5-5")!, { ...request, effort: "high" });
+    expect(params.thinking).toEqual({ type: "adaptive" });
+    expect(params.output_config?.effort).toBe("low");
+    expect(params.fallbacks).toBe("default");
+  });
+
+  it("keeps the requested effort on Opus 5.5 when thinking is welcome", () => {
+    const params = buildParams(getModel("claude-opus-5-5")!, {
+      feature: "chat",
+      messages: [],
+      effort: "medium",
+    });
+    expect(params.thinking).toEqual({ type: "adaptive" });
+    expect(params.output_config?.effort).toBe("medium");
   });
 });

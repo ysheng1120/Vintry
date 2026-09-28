@@ -42,5 +42,10 @@ Style: friendly, brief and practical, like a good sommelier at the table. Use sh
 
 /** The system blocks for a request, with a cache breakpoint after the static prompt. */
 export function systemBlocks(settings: PromptSettings): BetaTextBlockParam[] {
-  return [{ type: "text", text: systemPromptText(settings), cache_control: { type: "ephemeral" } }];
+  return systemBlocksFor(systemPromptText(settings));
+}
+
+/** The system blocks for a prompt text already frozen on a thread. */
+export function systemBlocksFor(text: string): BetaTextBlockParam[] {
+  return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
 }

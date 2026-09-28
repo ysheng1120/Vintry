@@ -131,10 +131,13 @@ export function buildParams(model: ModelInfo, request: AiRequest): MessageParams
   const outputConfig: BetaOutputConfig = {};
   if (request.outputFormat) outputConfig.format = request.outputFormat;
   if (model.effort && request.effort) outputConfig.effort = request.effort;
+  // A model that always thinks rejects `thinking: disabled`; low effort is the closest thing.
+  if (model.thinkingAlwaysOn && request.noThinking && model.effort) outputConfig.effort = "low";
   if (Object.keys(outputConfig).length > 0) params.output_config = outputConfig;
 
   if (model.adaptiveThinking) {
-    params.thinking = request.noThinking ? { type: "disabled" } : { type: "adaptive" };
+    params.thinking =
+      request.noThinking && !model.thinkingAlwaysOn ? { type: "disabled" } : { type: "adaptive" };
   }
   if (model.refusalFallback) {
     params.betas = [REFUSAL_FALLBACK_BETA];

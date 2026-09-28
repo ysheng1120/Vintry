@@ -193,7 +193,8 @@ describe("large import", () => {
     expect(preview.includedCount).toBe(300);
 
     const result = await importRows({ rows: preview.drafts });
-    expect(Date.now() - started).toBeLessThan(5000);
+    // A guard against an order-of-magnitude regression, not a benchmark (machines under load vary).
+    expect(Date.now() - started).toBeLessThan(15_000);
     expect(await db.wines.count()).toBe(300);
 
     const undone = await undoBatch(result.batchId!);

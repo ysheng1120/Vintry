@@ -5,14 +5,16 @@ import type {
   BetaToolResultBlockParam,
   BetaToolUseBlock,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import { db } from "../../db/db";
 import { getSetting, SETTING_KEYS } from "../../db/settings";
+import { nowIso } from "../../domain/clock";
 import type { CommandResult, WineDraft } from "../../domain/commands";
 import type { ChatMessage } from "../../domain/types";
 import { newId } from "../../lib/id";
 import { sendMessage } from "../client";
 import { toAiError } from "../errors";
 import { buildCellarSnapshot, describeScreen, type ScreenContext } from "./context";
-import { systemBlocks, type PromptSettings } from "./prompt";
+import { systemBlocksFor, systemPromptText, type PromptSettings } from "./prompt";
 import { applyProposal, isProposalTool, prepareProposal } from "./proposals";
 import { isReadTool, runReadTool } from "./readTools";
 import { endRun, isBusy, setStreamText, startRun } from "./runState";
@@ -20,6 +22,7 @@ import {
   appendMessage,
   appendNotice,
   createThread,
+  getThread,
   listMessages,
   titleThread,
   updateMeta,
@@ -54,12 +57,18 @@ export const SESSION_ID = newId();
 
 const CACHE = { type: "ephemeral" } as const;
 
-function blocksOf(row: StoredMessage): BetaContentBlockParam[] {
+function blocksOf(row: StoredMessage, dropThinking = false): BetaContentBlockParam[] {
   if (typeof row.content === "string") return [{ type: "text", text: row.content }];
   // Stored blocks are exactly what was sent or received (assistant blocks are passed back as
   // returned, thinking blocks included).
-  return structuredClone(row.content) as unknown as BetaContentBlockParam[];
+  const blocks = structuredClone(row.content) as unknown as BetaContentBlockParam[];
+  return dropThinking
+    ? blocks.filter((block) => block.type !== "thinking" && block.type !== "redacted_thinking")
+    : blocks;
 }
+
+const hasToolUse = (row: StoredMessage) =>
+  Array.isArray(row.content) && row.content.some((block) => block.type === "tool_use");
 
 function withCache(block: BetaContentBlockParam): BetaContentBlockParam {
   return { ...block, cache_control: CACHE } as BetaContentBlockParam;
@@ -68,13 +77,29 @@ function withCache(block: BetaContentBlockParam): BetaContentBlockParam {
 /**
  * The API messages for a thread: notices are left out and consecutive rows of one role are
  * joined. Cache breakpoints go on the latest cellar snapshot and on the last block.
+ *
+ * `thinkingSince`: thinking in assistant rows from before then was made under an earlier
+ * system prompt, so it is left out (removing the oldest thinking is allowed; a newer model
+ * would reject thinking tied to another prompt). The last assistant row keeps its thinking
+ * while its tool calls still wait for results, since a tool round must pass it back.
  */
-export function buildMessages(rows: StoredMessage[]): BetaMessageParam[] {
+export function buildMessages(
+  rows: StoredMessage[],
+  thinkingSince: string | null = null,
+): BetaMessageParam[] {
   const sent = rows.filter((row) => row.meta.kind !== "notice");
   const lastContext = sent.findLastIndex((row) => row.meta.kind === "context");
+  const lastAssistant = sent.findLastIndex((row) => row.role === "assistant");
   const messages: BetaMessageParam[] = [];
   sent.forEach((row, index) => {
-    const blocks = blocksOf(row);
+    const inOpenToolRound = index === lastAssistant && hasToolUse(row);
+    const stale =
+      thinkingSince !== null &&
+      row.role === "assistant" &&
+      row.createdAt < thinkingSince &&
+      !inOpenToolRound;
+    const blocks = blocksOf(row, stale);
+    if (blocks.length === 0) return;
     if (index === lastContext && blocks[0]) blocks[0] = withCache(blocks[0]);
     const previous = messages.at(-1);
     if (previous && previous.role === row.role && Array.isArray(previous.content)) {
@@ -170,8 +195,22 @@ async function handleToolUse(block: BetaToolUseBlock): Promise<ToolRecord> {
  * Sends requests until Claude ends its turn, a card waits for the collector, or the round cap
  * is reached. `roundsDone` counts the tool rounds already used in this user turn.
  */
+/**
+ * The thread's frozen system prompt, and when it was frozen. A thread that has none yet gets
+ * one now, built from the current settings (a thread from before prompts were frozen, too).
+ */
+async function threadPrompt(threadId: string): Promise<{ text: string; since: string | null }> {
+  const thread = await getThread(threadId);
+  if (thread?.systemPrompt)
+    return { text: thread.systemPrompt, since: thread.systemPromptFrom ?? null };
+  const text = systemPromptText(await promptSettings());
+  const since = nowIso();
+  await db.chatThreads.update(threadId, { systemPrompt: text, systemPromptFrom: since });
+  return { text, since };
+}
+
 async function runRounds(threadId: string, roundsDone: number, signal: AbortSignal) {
-  const settings = await promptSettings();
+  const prompt = await threadPrompt(threadId);
   let rounds = roundsDone;
   for (;;) {
     const rows = await listMessages(threadId);
@@ -179,9 +218,9 @@ async function runRounds(threadId: string, roundsDone: number, signal: AbortSign
     const response = await sendMessage(
       {
         feature: "chat",
-        system: systemBlocks(settings),
+        system: systemBlocksFor(prompt.text),
         tools: sommelierTools(),
-        messages: buildMessages(rows),
+        messages: buildMessages(rows, prompt.since),
         effort: "medium",
         maxTokens: MAX_TOKENS,
       },
