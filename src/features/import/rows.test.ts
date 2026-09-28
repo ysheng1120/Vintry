@@ -312,6 +312,20 @@ describe("CellarTracker rows", () => {
       defaultCurrency: null,
     });
 
+  it("keeps CellarTracker's own wine id (iWine) on the draft, but only for a CellarTracker file", () => {
+    expect(build([ct({ iWine: " 100001 " }), ct({ iWine: "" })]).drafts[0]?.cellarTrackerId).toBe(
+      "100001",
+    );
+    expect(build([ct({ iWine: "" })]).drafts[0]).not.toHaveProperty("cellarTrackerId");
+    const generic = buildImportRows([ct({ iWine: "100001" })], {
+      source: "generic",
+      mapping: CT_MAPPING,
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+    expect(generic.drafts[0]).not.toHaveProperty("cellarTrackerId");
+  });
+
   it("reads Type and Category with Color, so Champagne is sparkling and Port fortified", () => {
     const preview = build([
       ct({}),

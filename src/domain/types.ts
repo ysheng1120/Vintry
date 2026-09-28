@@ -189,6 +189,11 @@ export const WineSchema = z.object({
   critics: WineCriticsSchema.nullable().optional(),
   /** "Suggested price", researched on the web from this wine's identity. Missing on older rows. */
   prices: WinePricesSchema.nullable().optional(),
+  /**
+   * CellarTracker's own id for this wine (its `iWine` column), kept from an import so a later
+   * export matches this wine even after its name was edited. Missing on most rows.
+   */
+  cellarTrackerId: z.string().nullable().optional(),
 });
 export type Wine = z.infer<typeof WineSchema>;
 

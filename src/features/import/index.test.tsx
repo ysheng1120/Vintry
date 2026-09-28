@@ -214,6 +214,77 @@ describe("ImportPage", () => {
     expect(await db.lots.count()).toBe(1);
   });
 
+  describe("an updated CellarTracker export", () => {
+    const HEADERS = "iWine,Producer,Wine,Vintage,Color,Quantity,Location,Bin,Price,Currency\n";
+    const FIRST =
+      HEADERS +
+      "100001,Ridge,Ridge Monte Bello,2019,Red,6,Cellar,A1,250,USD\n" +
+      "100002,Ridge,Ridge Lytton Springs,2020,Red,3,Cellar,A2,60,USD\n" +
+      "100003,Ridge,Ridge Geyserville,2021,Red,2,Cellar,A3,45,USD\n";
+    // One more Monte Bello bought, one Lytton Springs drunk (not yet recorded in Vintry).
+    const UPDATED =
+      HEADERS +
+      "100001,Ridge,Ridge Monte Bello,2019,Red,7,Cellar,A1,250,USD\n" +
+      "100002,Ridge,Ridge Lytton Springs,2020,Red,2,Cellar,A2,60,USD\n" +
+      "100003,Ridge,Ridge Geyserville,2021,Red,2,Cellar,A3,45,USD\n";
+
+    async function previewCellarTracker(text: string) {
+      await chooseFile(text, "cellartracker.csv");
+      await screen.findByText("CellarTracker", { selector: "span" });
+      await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+      await screen.findByText("Default currency");
+      await userEvent.click(screen.getByRole("button", { name: "Preview import" }));
+    }
+
+    async function importFirstFile() {
+      renderPage();
+      await previewCellarTracker(FIRST);
+      await userEvent.click(await screen.findByRole("button", { name: "Import 3 wines" }));
+      await waitFor(async () => expect(await db.lots.count()).toBe(3));
+      await userEvent.click(await screen.findByRole("button", { name: "Import another file" }));
+    }
+
+    const bottlesOf = async (name: string) => {
+      const wine = (await db.wines.toArray()).find((w) => w.name === name)!;
+      const lots = await db.lots.where("wineId").equals(wine.id).toArray();
+      return lots.reduce((sum, lot) => sum + lot.quantity, 0);
+    };
+
+    it("adds only the new bottle and leaves the rest as they are", async () => {
+      await importFirstFile();
+      await previewCellarTracker(UPDATED);
+
+      const table = await screen.findByRole("table");
+      expect(within(table).getByText("Adds 1 (6 already in your cellar)")).toBeInTheDocument();
+      expect(
+        within(table).getByText("Vintry has 3, the file has 2: record drinks in Vintry"),
+      ).toBeInTheDocument();
+      expect(within(table).getByText("Already in your cellar")).toBeInTheDocument();
+      expect(screen.getByText(/2 of 3 rows look already in your cellar\./)).toBeInTheDocument();
+      expect(
+        screen.getByText("1 row has more bottles than your cellar. Only the new ones are added."),
+      ).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Import 1 wine" }));
+      await waitFor(async () => expect(await bottlesOf("Monte Bello")).toBe(7));
+      expect(await bottlesOf("Lytton Springs")).toBe(3);
+      expect(await bottlesOf("Geyserville")).toBe(2);
+      expect(await db.wines.count()).toBe(3);
+      expect(await db.locations.count()).toBe(1);
+    });
+
+    it("imports the whole row when it is included anyway", async () => {
+      await importFirstFile();
+      await previewCellarTracker(UPDATED);
+
+      await userEvent.click(await screen.findByLabelText("Import all of row 1 anyway"));
+      await userEvent.click(screen.getByLabelText("Include row 2 anyway"));
+      await userEvent.click(screen.getByRole("button", { name: "Import 2 wines" }));
+      await waitFor(async () => expect(await bottlesOf("Monte Bello")).toBe(13));
+      expect(await bottlesOf("Lytton Springs")).toBe(5);
+    });
+  });
+
   it("importing a row anyway after the notice adds it as a second lot", async () => {
     renderPage();
     await chooseAndMapSmallFile();

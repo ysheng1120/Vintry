@@ -4,7 +4,7 @@ import { newId } from "../../lib/id";
 import { nowIso } from "../clock";
 import type { ChangeSet } from "../events";
 import { bottles, wineLabel } from "../labels";
-import { isMatchCandidate, normalizeName, wineKey } from "../match";
+import { buildWineMatcher, normalizeName } from "../match";
 import { LotSchema, WineSchema, type EventSource, type Wine } from "../types";
 import { allowedWindowSource } from "../window";
 import {
@@ -15,24 +15,20 @@ import {
   notFound,
   type CommandContext,
 } from "./core";
-import { WineDraftSchema, WineFieldsSchema, WineValueFieldsSchema } from "./schemas";
+import {
+  ImportDraftSchema,
+  WineDraftSchema,
+  WineFieldsSchema,
+  WineValueFieldsSchema,
+} from "./schemas";
 import { pluralize } from "../../lib/format";
 
-type ParsedDraft = z.output<typeof WineDraftSchema>;
+type ParsedDraft = z.output<typeof WineDraftSchema> & { cellarTrackerId?: string | null };
 
 function checkWindow(from: number | null | undefined, to: number | null | undefined) {
   if (from != null && to != null && to < from) {
     throw new CommandError("The drinking window ends before it starts.", "invalid-input");
   }
-}
-
-/** Index of wines a draft may attach to, keyed by the matcher key (KTD6). */
-async function buildWineIndex(): Promise<Map<string, Wine>> {
-  const index = new Map<string, Wine>();
-  for (const wine of await db.wines.toArray()) {
-    if (isMatchCandidate(wine) && !index.has(wineKey(wine))) index.set(wineKey(wine), wine);
-  }
-  return index;
 }
 
 export interface AddDraftsOutcome {
@@ -42,14 +38,16 @@ export interface AddDraftsOutcome {
 
 /**
  * Adds drafts inside a command: each draft attaches to `wineId` (unless it is a sample wine),
- * else to a matching wine, else creates a new wine; then each lot draft becomes a lot.
+ * else to a matching wine (by CellarTracker id, then by name; see `buildWineMatcher`), else
+ * creates a new wine; then each lot draft becomes a lot. A draft's CellarTracker id is kept on
+ * a wine it creates, or on the wine it joins when that wine has none yet.
  */
 export async function addDrafts(
   changes: ChangeSet,
   drafts: ParsedDraft[],
   source: EventSource,
 ): Promise<AddDraftsOutcome> {
-  const index = await buildWineIndex();
+  const matcher = buildWineMatcher(await db.wines.toArray());
   const locationIds = new Set(await db.locations.toCollection().primaryKeys());
   const wines = new Map<string, Wine>();
   let bottleCount = 0;
@@ -62,9 +60,9 @@ export async function addDrafts(
       if (!wine || wine.deletedAt) throw notFound("wine");
       // Real bottles never attach to a sample wine (clearing samples would remove them), so treat
       // the draft like one without a wineId: match a real wine, else create one.
-      if (wine.isSample) wine = index.get(wineKey(draft));
+      if (wine.isSample) wine = matcher.find(draft);
     } else {
-      wine = index.get(wineKey(draft));
+      wine = matcher.find(draft);
     }
     if (!wine) {
       const t = nowIso();
@@ -90,9 +88,13 @@ export async function addDrafts(
         rating: draft.rating ?? null,
         tags: draft.tags ?? [],
         notes: cleanText(draft.notes),
+        ...(draft.cellarTrackerId ? { cellarTrackerId: draft.cellarTrackerId } : {}),
       });
       await changes.insert("wines", wine);
-      index.set(wineKey(wine), wine);
+      matcher.add(wine);
+    } else if (draft.cellarTrackerId && !wine.cellarTrackerId) {
+      wine = await changes.update("wines", wine.id, { cellarTrackerId: draft.cellarTrackerId });
+      matcher.add(wine);
     }
     wines.set(wine.id, wine);
 
@@ -148,7 +150,7 @@ export const addBottlesCommand = defineCommand({
 });
 
 const ImportRowsInput = z.object({
-  rows: z.array(WineDraftSchema).min(1),
+  rows: z.array(ImportDraftSchema).min(1),
   /**
    * Locations named in the file that Vintry does not have yet, with the ids the rows' lots use
    * for them. They are created in the same undoable change as the bottles.

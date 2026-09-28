@@ -24,7 +24,11 @@ const stamp = () => ({ id: newId(), createdAt: t, updatedAt: t });
 /** Puts one realistic row in every backed-up table. */
 async function seedEveryTable() {
   const location = makeLocation();
-  const wine = makeWine({ thumbnail: "data:image/jpeg;base64,AAAA", grapes: ["Cabernet"] });
+  const wine = makeWine({
+    thumbnail: "data:image/jpeg;base64,AAAA",
+    grapes: ["Cabernet"],
+    cellarTrackerId: "100001",
+  });
   const lot = makeLot({ wineId: wine.id, locationId: location.id, currency: "USD" });
   const consumption = {
     ...stamp(),

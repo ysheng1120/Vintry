@@ -100,6 +100,13 @@ export function cellarTrackerPending(row: Record<string, string>): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+/** CellarTracker's own wine id (its `iWine` column), or null when the row has none. */
+export function cellarTrackerWineId(row: Record<string, string>): string | null {
+  const key = Object.keys(row).find((k) => k.trim().toLowerCase() === "iwine");
+  const value = key ? (row[key] ?? "").trim() : "";
+  return value || null;
+}
+
 const vivinoPreset: Preset = {
   id: "vivino",
   detect(headers) {

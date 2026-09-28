@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { WineDraft } from "../../domain/commands/schemas";
+import type { ImportDraft, WineDraft } from "../../domain/commands/schemas";
 import type { Lot, Wine } from "../../domain/types";
 import {
+  draftsToImport,
   findDuplicateRowIndexes,
   isLikelyDuplicate,
+  leftOutRowIndexes,
+  planImportRows,
+  rowPlanLabel,
   shouldImportRow,
   type ExistingCellar,
 } from "./duplicates";
@@ -61,7 +65,7 @@ function lot(overrides: Partial<Lot> & { wineId: string }): Lot {
   };
 }
 
-function draft(overrides: Partial<WineDraft> = {}): WineDraft {
+function draft(overrides: Partial<ImportDraft> = {}): ImportDraft {
   return {
     producer: "Ridge",
     name: "Monte Bello",
@@ -212,5 +216,129 @@ describe("shouldImportRow", () => {
 
   it("never keeps a skipped row (no draft), duplicate or not", () => {
     expect(shouldImportRow(skipped, new Set(), new Set([1]))).toBe(false);
+  });
+});
+
+describe("planImportRows", () => {
+  function row(rowIndex: number, d: ImportDraft | null): ImportRow {
+    return { rowIndex, draft: d, issues: [] };
+  }
+  const ct = { compareCounts: true };
+  const kitchen = { id: "kitchen", name: "Kitchen rack" };
+
+  /** Vintry has `quantity` open bottles of Ridge Monte Bello 2019 in the kitchen rack, bin A1. */
+  function cellarWith(quantity: number, wineOverrides: Partial<Wine> = {}): ExistingCellar {
+    return {
+      wines: [wine(wineOverrides)],
+      lots: [lot({ wineId: "wine-1", quantity, locationId: "kitchen", bin: "A1" })],
+      locations: [kitchen],
+    };
+  }
+
+  function ctRow(quantity: number, overrides: Partial<ImportDraft> = {}): ImportDraft {
+    return draft({
+      cellarTrackerId: "100001",
+      lots: [{ quantity, locationId: "kitchen", bin: "a1", pricePerBottle: 250 }],
+      ...overrides,
+    });
+  }
+
+  it("tops up: 6 in the file against 5 in the cellar adds only 1", () => {
+    const plans = planImportRows([row(0, ctRow(6))], cellarWith(5), ct);
+    expect(plans.get(0)).toEqual({ kind: "topUp", add: 1, have: 5 });
+    expect(rowPlanLabel(plans.get(0))).toBe("Adds 1 (5 already in your cellar)");
+    const [only] = draftsToImport([row(0, ctRow(6))], plans, new Set());
+    expect(only?.draft.lots?.[0]).toMatchObject({ quantity: 1, locationId: "kitchen" });
+  });
+
+  it("leaves out a row whose count matches, even when its price or date differ", () => {
+    const plans = planImportRows([row(0, ctRow(6))], cellarWith(6), ct);
+    expect(plans.get(0)).toEqual({ kind: "already" });
+    expect(rowPlanLabel(plans.get(0))).toBe("Already in your cellar");
+    expect(draftsToImport([row(0, ctRow(6))], plans, new Set())).toEqual([]);
+  });
+
+  it("changes nothing when the file has fewer bottles than the cellar", () => {
+    const plans = planImportRows([row(0, ctRow(4))], cellarWith(6), ct);
+    expect(plans.get(0)).toEqual({ kind: "fewer", have: 6, file: 4 });
+    expect(rowPlanLabel(plans.get(0))).toBe(
+      "Vintry has 6, the file has 4: record drinks in Vintry",
+    );
+    expect(leftOutRowIndexes(plans)).toEqual(new Set([0]));
+    expect(draftsToImport([row(0, ctRow(4))], plans, new Set())).toEqual([]);
+  });
+
+  it("matches by CellarTracker id after the wine's name was edited in Vintry", () => {
+    const c = cellarWith(5, { name: "Monte Bello Estate", cellarTrackerId: "100001" });
+    expect(planImportRows([row(0, ctRow(6))], c, ct).get(0)).toEqual({
+      kind: "topUp",
+      add: 1,
+      have: 5,
+    });
+    // Without the id the edited name no longer matches: the whole row is new.
+    const noId = ctRow(6, { cellarTrackerId: undefined });
+    expect(planImportRows([row(0, noId)], c, ct).get(0)).toEqual({ kind: "new" });
+  });
+
+  it("keeps the exact-duplicate rule for a file that isn't a cellar export (no count compare)", () => {
+    const generic = ctRow(6, { cellarTrackerId: undefined });
+    // A generic row with a different count is a new purchase: imported in full.
+    expect(planImportRows([row(0, generic)], cellarWith(5)).get(0)).toEqual({ kind: "new" });
+    expect(planImportRows([row(0, generic)], cellarWith(9)).get(0)).toEqual({ kind: "new" });
+    // An exact match (same count, price, date and location) is still left out.
+    const exact: ExistingCellar = {
+      ...cellarWith(6),
+      lots: [lot({ wineId: "wine-1", quantity: 6, locationId: "kitchen", pricePerBottle: 250 })],
+    };
+    expect(planImportRows([row(0, generic)], exact).get(0)).toEqual({ kind: "already" });
+  });
+
+  it("uses the exact-duplicate rule for a CellarTracker row where the wine has no open bottles", () => {
+    const c: ExistingCellar = {
+      wines: [wine()],
+      lots: [lot({ wineId: "wine-1", quantity: 5, locationId: null, pricePerBottle: 250 })],
+      locations: [kitchen],
+    };
+    // The wine's bottles are elsewhere (No location), so the kitchen row is new.
+    expect(planImportRows([row(0, ctRow(6))], c, ct).get(0)).toEqual({ kind: "new" });
+  });
+
+  it("never matches a row that goes to a location Vintry doesn't have yet", () => {
+    const toNewRack = ctRow(6, { lots: [{ quantity: 6, locationId: "tmp-rack", bin: "A1" }] });
+    const c: ExistingCellar = {
+      wines: [wine()],
+      lots: [lot({ wineId: "wine-1", quantity: 6, locationId: null })],
+      locations: [kitchen],
+    };
+    expect(planImportRows([row(0, toNewRack)], c, ct).get(0)).toEqual({ kind: "new" });
+    expect(planImportRows([row(0, toNewRack)], c).get(0)).toEqual({ kind: "new" });
+  });
+
+  it("compares a place's rows together: bottles already there cover the first rows", () => {
+    const rows = [row(0, ctRow(3)), row(1, ctRow(2)), row(2, ctRow(2))];
+    const plans = planImportRows(rows, cellarWith(4), ct);
+    expect(plans.get(0)).toEqual({ kind: "already" });
+    expect(plans.get(1)).toEqual({ kind: "topUp", add: 1, have: 1 });
+    expect(plans.get(2)).toEqual({ kind: "new" });
+    const sent = draftsToImport(rows, plans, new Set()).map((d) => d.draft.lots?.[0]?.quantity);
+    expect(sent).toEqual([1, 2]);
+  });
+
+  it("imports the full row when the collector includes it anyway", () => {
+    const rows = [row(0, ctRow(6)), row(1, ctRow(4, { vintage: 2020 }))];
+    const c: ExistingCellar = {
+      wines: [wine(), wine({ id: "wine-2", vintage: 2020 })],
+      lots: [
+        lot({ id: "l1", wineId: "wine-1", quantity: 5, locationId: "kitchen", bin: "A1" }),
+        lot({ id: "l2", wineId: "wine-2", quantity: 6, locationId: "kitchen", bin: "A1" }),
+      ],
+      locations: [kitchen],
+    };
+    const plans = planImportRows(rows, c, ct);
+    expect(plans.get(0)?.kind).toBe("topUp");
+    expect(plans.get(1)?.kind).toBe("fewer");
+    const sent = draftsToImport(rows, plans, new Set([0, 1]));
+    expect(sent.map((d) => d.draft.lots?.[0]?.quantity)).toEqual([6, 4]);
+    expect(sent[0]?.draft).toBe(rows[0]?.draft);
   });
 });
