@@ -189,6 +189,10 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
+        text: "Import a newer CellarTracker export at any time: Vintry adds only the new bottles. If the file has fewer bottles than Vintry in a place, Vintry changes nothing there and asks you to record the drinks in Vintry.",
+      },
+      {
+        kind: "text",
         text: "Rows that match bottles already in your cellar (same wine, count, price, purchase date, and location) are marked Already in your cellar and left out. Tick them if you really want to add them again.",
       },
       {

@@ -213,6 +213,30 @@ describe("importRows", () => {
     expect(await db.wines.count()).toBe(300);
   });
 
+  it("keeps 750 ml and magnum rows with the same CellarTracker id as two wines", async () => {
+    await importRows({
+      rows: [
+        { ...monteBello, cellarTrackerId: "100001", lots: [{ quantity: 6 }] },
+        { ...monteBello, bottleSize: 1500, cellarTrackerId: "100001", lots: [{ quantity: 2 }] },
+      ],
+    });
+    const wines = await db.wines.toArray();
+    expect(wines.map((w) => w.bottleSize).sort()).toEqual([1500, 750]);
+    // Importing the file again tops each size up separately, never mixing them.
+    await importRows({
+      rows: [
+        { ...monteBello, bottleSize: 1500, cellarTrackerId: "100001", lots: [{ quantity: 1 }] },
+      ],
+    });
+    const magnum = (await db.wines.toArray()).find((w) => w.bottleSize === 1500)!;
+    const magnumBottles = (await db.lots.where("wineId").equals(magnum.id).toArray()).reduce(
+      (sum, l) => sum + l.quantity,
+      0,
+    );
+    expect(magnumBottles).toBe(3);
+    expect(await db.wines.count()).toBe(2);
+  });
+
   it("creates the file's new locations in the same batch, and one undo removes them", async () => {
     await db.locations.add({
       id: "kitchen",

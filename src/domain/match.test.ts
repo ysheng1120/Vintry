@@ -66,6 +66,20 @@ describe("buildWineMatcher", () => {
     expect(matcher.find(ridge)?.id).toBe(byName.id);
   });
 
+  it("needs the same bottle size to match by CellarTracker id, so a magnum never joins a 750 ml wine", () => {
+    const standard = makeWine({ ...ridge, cellarTrackerId: "100001" });
+    const matcher = buildWineMatcher([standard]);
+    expect(matcher.find({ ...ridge, cellarTrackerId: "100001" })?.id).toBe(standard.id);
+    expect(matcher.find({ ...ridge, bottleSize: 1500, cellarTrackerId: "100001" })).toBeUndefined();
+
+    const magnum = makeWine({ ...ridge, bottleSize: 1500, cellarTrackerId: "100001" });
+    matcher.add(magnum);
+    expect(matcher.find({ ...ridge, bottleSize: 1500, cellarTrackerId: "100001" })?.id).toBe(
+      magnum.id,
+    );
+    expect(matcher.find({ ...ridge, cellarTrackerId: "100001" })?.id).toBe(standard.id);
+  });
+
   it("never matches a deleted or sample wine by id", () => {
     const matcher = buildWineMatcher([
       makeWine({ name: "Old", cellarTrackerId: "1", deletedAt: "2026-01-01" }),

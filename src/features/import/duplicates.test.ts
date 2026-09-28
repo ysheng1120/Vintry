@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ImportDraft, WineDraft } from "../../domain/commands/schemas";
+import type { ImportDraft } from "../../domain/commands/schemas";
 import type { Lot, Wine } from "../../domain/types";
 import {
   draftsToImport,
-  findDuplicateRowIndexes,
   isLikelyDuplicate,
   leftOutRowIndexes,
   planImportRows,
   rowPlanLabel,
-  shouldImportRow,
   type ExistingCellar,
 } from "./duplicates";
 import type { ImportRow } from "./rows";
@@ -184,38 +182,6 @@ describe("isLikelyDuplicate", () => {
 
   it("is false for a row with no lots", () => {
     expect(isLikelyDuplicate(draft({ lots: [] }), cellar())).toBe(false);
-  });
-});
-
-describe("findDuplicateRowIndexes", () => {
-  function row(rowIndex: number, d: WineDraft | null): ImportRow {
-    return { rowIndex, draft: d, issues: [] };
-  }
-
-  it("flags only the rows that match, keeping the rest out", () => {
-    const rows = [row(0, draft()), row(1, draft({ producer: "Someone Else" })), row(2, null)];
-    expect(findDuplicateRowIndexes(rows, cellar())).toEqual(new Set([0]));
-  });
-});
-
-describe("shouldImportRow", () => {
-  const row: ImportRow = { rowIndex: 0, draft: draft(), issues: [] };
-  const skipped: ImportRow = { rowIndex: 1, draft: null, issues: [] };
-
-  it("keeps a non-duplicate row", () => {
-    expect(shouldImportRow(row, new Set(), new Set())).toBe(true);
-  });
-
-  it("leaves out a duplicate row by default", () => {
-    expect(shouldImportRow(row, new Set([0]), new Set())).toBe(false);
-  });
-
-  it("includes a duplicate row the collector chose to include", () => {
-    expect(shouldImportRow(row, new Set([0]), new Set([0]))).toBe(true);
-  });
-
-  it("never keeps a skipped row (no draft), duplicate or not", () => {
-    expect(shouldImportRow(skipped, new Set(), new Set([1]))).toBe(false);
   });
 });
 

@@ -48,10 +48,14 @@ export interface WineMatcher {
 /**
  * Matches drafts to match candidates: by CellarTracker's wine id first (so a renamed wine still
  * matches its next export), then by `wineKey`. The first candidate for a key wins.
+ * CellarTracker's id names a wine and vintage, not a bottle size, so the id match also needs the
+ * same size: a magnum row never joins the 750 ml wine (lots carry no size of their own).
  */
 export function buildWineMatcher(wines: Wine[]): WineMatcher {
   const byKey = new Map<string, Wine>();
   const byCellarTrackerId = new Map<string, Wine>();
+  const idKey = (id: string, size: number | null | undefined) =>
+    `${id}|${size ?? DEFAULT_BOTTLE_SIZE}`;
   const add = (wine: Wine) => {
     if (!isMatchCandidate(wine)) return;
     const key = wineKey(wine);
@@ -59,13 +63,16 @@ export function buildWineMatcher(wines: Wine[]): WineMatcher {
     if (!known || known.id === wine.id) byKey.set(key, wine);
     const ctId = wine.cellarTrackerId;
     if (!ctId) return;
-    const knownCt = byCellarTrackerId.get(ctId);
-    if (!knownCt || knownCt.id === wine.id) byCellarTrackerId.set(ctId, wine);
+    const ctKey = idKey(ctId, wine.bottleSize);
+    const knownCt = byCellarTrackerId.get(ctKey);
+    if (!knownCt || knownCt.id === wine.id) byCellarTrackerId.set(ctKey, wine);
   };
   for (const wine of wines) add(wine);
   return {
     find(draft) {
-      const byId = draft.cellarTrackerId ? byCellarTrackerId.get(draft.cellarTrackerId) : undefined;
+      const byId = draft.cellarTrackerId
+        ? byCellarTrackerId.get(idKey(draft.cellarTrackerId, draft.bottleSize))
+        : undefined;
       return byId ?? byKey.get(wineKey(draft));
     },
     add,

@@ -190,28 +190,6 @@ export function leftOutRowIndexes(plans: Map<number, RowPlan>): Set<number> {
   return new Set([...plans].filter(([, plan]) => isLeftOut(plan)).map(([rowIndex]) => rowIndex));
 }
 
-/** The `rowIndex` of every import row that is left out by default (see `planImportRows`). */
-export function findDuplicateRowIndexes(
-  rows: ImportRow[],
-  cellar: ExistingCellar,
-  options: PlanOptions = {},
-): Set<number> {
-  return leftOutRowIndexes(planImportRows(rows, cellar, options));
-}
-
-/**
- * Whether a row should be sent to `importRows`: it has a draft, and either it isn't left out or
- * the collector chose to include it anyway.
- */
-export function shouldImportRow(
-  row: ImportRow,
-  duplicateRowIndexes: Set<number>,
-  includedOverrides: Set<number>,
-): boolean {
-  if (!row.draft) return false;
-  return !duplicateRowIndexes.has(row.rowIndex) || includedOverrides.has(row.rowIndex);
-}
-
 /**
  * The drafts to send to `importRows`: rows that aren't left out, plus those the collector
  * included anyway. A top-up row adds only its new bottles, unless included anyway, which
