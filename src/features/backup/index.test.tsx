@@ -176,7 +176,7 @@ describe("BackupPage", () => {
       "div",
     )!;
     expect(card).toHaveTextContent(
-      "On. Vintry saves a backup to /Users/ann/Documents/Vintry Backups after your changes. Last saved 5 minutes ago. The 30 newest are kept.",
+      "On. Vintry saves a backup to /Users/ann/Documents/Vintry Backups after your changes. Last saved 5 minutes ago. It keeps the newest 20, and one for each recent day, week, and month.",
     );
     expect(card).toHaveTextContent("To restore, choose a file from that folder");
     expect(fetchMock).toHaveBeenCalledWith(AUTO_BACKUP_STATUS_URL, expect.anything());

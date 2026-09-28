@@ -16,8 +16,6 @@ export const AUTO_BACKUP_STATUS_URL = "/__vintry/backup/status";
 export const AUTO_BACKUP_DELAY_MS = 60_000;
 /** After a failed backup, try again this long later. */
 export const AUTO_BACKUP_RETRY_MS = 5 * 60_000;
-/** Keep in step with AUTO_BACKUPS_KEPT in server/autoBackupPlugin.ts. */
-export const AUTO_BACKUPS_KEPT = 30;
 
 /** After a change, a backup is read and kept ready this soon, for a tab that closes. */
 export const AUTO_BACKUP_PREPARE_MS = 2_000;

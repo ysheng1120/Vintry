@@ -23,12 +23,7 @@ import { db } from "../../db/db";
 import { bottles } from "../../domain/labels";
 import { formatDate, pluralize, toIsoDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
-import {
-  AUTO_BACKUPS_KEPT,
-  checkAutoBackup,
-  formatSavedAgo,
-  useAutoBackupState,
-} from "./autoBackup";
+import { checkAutoBackup, formatSavedAgo, useAutoBackupState } from "./autoBackup";
 import { buildCellarCsv } from "./cellarCsv";
 import {
   BACKUP_FOLDER_SETTING_KEY,
@@ -173,8 +168,8 @@ function AutoBackupCard() {
       <p className="text-ink-muted">
         On. Vintry saves a backup to{" "}
         <span className="font-medium [overflow-wrap:anywhere] text-ink">{folder}</span> after your
-        changes. {latest ? `Last saved ${formatSavedAgo(latest.savedAt)}.` : "None saved yet."} The{" "}
-        {AUTO_BACKUPS_KEPT} newest are kept.
+        changes. {latest ? `Last saved ${formatSavedAgo(latest.savedAt)}.` : "None saved yet."} It
+        keeps the newest 20, and one for each recent day, week, and month.
       </p>
       <p className="text-sm text-ink-subtle">
         To restore, choose a file from that folder under Restore from backup.

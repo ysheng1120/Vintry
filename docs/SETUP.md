@@ -103,7 +103,7 @@ Your cellar lives in your browser. Back it up now and then.
 When you start Vintry with the launcher, it saves backups by itself, in every browser:
 
 - About a minute after your changes, and when you close the tab, Vintry saves a backup file to the **Vintry Backups** folder in your **Documents** folder. On Windows with OneDrive, that is the Documents folder in OneDrive. The files stay on your computer.
-- Vintry keeps the newest 30 files there and deletes older ones. It never touches other files in that folder.
+- Vintry keeps the newest 20 files there, plus the last file of each of the past 14 days, 8 weeks, and 12 months, and deletes the rest. So a busy day or a second browser can't push out your older backups. A backup with no wines of your own is not saved over one that has wines. Vintry never touches other files in that folder.
 - **More → Backup & restore** shows the folder and when the last backup was saved.
 - To restore, open **More → Backup & restore → Restore from backup** and choose a file from that folder.
 - If a backup can't be saved (for example, the disk is full), Vintry shows a notice that says why.

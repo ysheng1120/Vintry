@@ -208,7 +208,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         kind: "text",
-        text: "When you start Vintry with the launcher, it backs up by itself, in every browser. About a minute after your changes, and when you close the tab, it saves a file to the Vintry Backups folder in your Documents folder. It keeps the newest 30. More → Backup & restore shows the folder and the last backup.",
+        text: "When you start Vintry with the launcher, it backs up by itself, in every browser. About a minute after your changes, and when you close the tab, it saves a file to the Vintry Backups folder in your Documents folder. It keeps the newest 20 backups, plus the last one of each of the past 14 days, 8 weeks, and 12 months, so a busy day or a second browser can't push out your older backups. A backup with no wines of your own is not saved over one that has wines. More → Backup & restore shows the folder and the last backup.",
       },
       {
         kind: "text",

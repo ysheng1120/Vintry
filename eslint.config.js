@@ -13,6 +13,7 @@ export default defineConfig([
     "playwright-report",
     "test-results",
     "docs/plans",
+    ".claude/worktrees",
   ]),
   {
     files: ["src/**/*.{ts,tsx}"],
