@@ -15,6 +15,17 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.6.0",
+    date: "2026-09-28",
+    headline: "Smarter re-imports, backups kept by day, week and month, and a lighter History.",
+    changes: [
+      "Import a newer CellarTracker export at any time: Vintry adds only the new bottles, and never adds the same bottles twice.",
+      "Automatic backups keep the newest 20, plus the last one of each of the past 14 days, 8 weeks, and 12 months, so a busy day or a second browser can't push out older backups. A backup with no wines is not saved over one that has wines.",
+      "History takes far less space: editing a wine no longer stores copies of its label photo. It keeps the last 90 days, and always your latest 500 changes. A wine deleted forever is also wiped from History.",
+      "Settings offers Claude Opus 5.5, newer and cheaper than Opus 5. Opus 5 stays the default for now.",
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-09-27",
     headline: "Safer CellarTracker imports, merges, and restores.",

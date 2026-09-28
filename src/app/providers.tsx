@@ -3,6 +3,7 @@ import { ToastProvider } from "../components/ui/Toast";
 import { onVersionChange } from "../db/db";
 import { onCommandCommitted } from "../domain/commands/core";
 import { purgeDeleted } from "../domain/commands/wines";
+import { pruneHistory } from "../domain/historyRetention";
 import { BannerProvider } from "./Banners";
 import { useBanner } from "./useBanner";
 import { browser } from "./browser";
@@ -49,14 +50,18 @@ function VersionChangeBanner() {
 }
 
 /**
- * Start-up housekeeping: purge wines deleted more than 30 days ago (KTD8), and ask the browser to
- * keep Vintry's data once the collector makes their first real change (R23).
+ * Start-up housekeeping: purge wines deleted more than 30 days ago (KTD8), then clear old changes
+ * from History (`pruneHistory`), and ask the browser to keep Vintry's data once the collector
+ * makes their first real change (R23).
  */
 function AppLifecycle() {
   useEffect(() => {
-    purgeDeleted().catch(() => {
-      // Purging is housekeeping; a failure must never block the app.
-    });
+    purgeDeleted()
+      .catch(() => undefined)
+      .then(() => pruneHistory())
+      .catch(() => {
+        // Purging and pruning are housekeeping; a failure must never block the app.
+      });
     return onCommandCommitted(() => {
       void requestPersistentStorage();
     });

@@ -11,4 +11,9 @@ export const SETTING_KEYS = {
   changesSinceBackup: "changesSinceBackup",
   /** The chosen backup folder's FileSystemDirectoryHandle (device-only). */
   backupFolder: "backupFolder",
+  /**
+   * `createdAt` of the newest change cleared from History by retention (`pruneHistory`). Kept
+   * changes older than this (restores and erases) can't be undone any more. Unset: none cleared.
+   */
+  historyClearedBefore: "historyClearedBefore",
 } as const;

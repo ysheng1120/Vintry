@@ -4,7 +4,8 @@ import { db } from "../db/db";
 import { bumpChangesSinceBackup } from "../db/settings";
 import { nowIso } from "./clock";
 import { referencesOf } from "./events";
-import type { EventBatch, RecordTableName } from "./types";
+import { historyClearedBefore } from "./historyRetention";
+import type { Change, EventBatch, RecordTableName } from "./types";
 
 export type UndoResult =
   { ok: true; summary: string } | { ok: false; reason: string; blockingBatch?: EventBatch };
@@ -26,10 +27,34 @@ const MISSING = "This change is no longer in the history.";
 const ALREADY_UNDONE = "This change has already been undone.";
 const PERMANENT = "Wines deleted forever can't be brought back.";
 const SNAPSHOT_GONE = "The safety copy for this change is no longer available.";
+export const SCRUBBED_REASON =
+  "This change involved a wine that was deleted forever, so it can't be undone.";
+export const CLEARED_AFTER_REASON =
+  "Some later changes are no longer kept in the history, so this can't be undone.";
+const RECORD_GONE = "A record this change touched no longer exists, so it can't be undone.";
 
 /** Batches that remove records for good ("Delete forever" and the 30-day purge) cannot be undone. */
 function isPermanent(batch: EventBatch): boolean {
   return batch.command === "purgeDeleted";
+}
+
+/**
+ * Why `batch` can't be undone whatever later batches did, or null. `snapshotKept` says whether
+ * its safety snapshot is still on the device; `clearedBefore` is the newest change cleared from
+ * the history (`pruneHistory`): a kept batch older than that has lost later changes that would
+ * stand in its way, so it can never be undone.
+ */
+function fixedReason(
+  batch: EventBatch,
+  snapshotKept: boolean,
+  clearedBefore: string | null,
+): string | null {
+  if (batch.undoneAt) return ALREADY_UNDONE;
+  if (isPermanent(batch)) return PERMANENT;
+  if (batch.changes.some((c) => c.scrubbed)) return SCRUBBED_REASON;
+  if (batch.snapshotId && !snapshotKept) return SNAPSHOT_GONE;
+  if (clearedBefore && batch.createdAt < clearedBefore) return CLEARED_AFTER_REASON;
+  return null;
 }
 
 /**
@@ -79,13 +104,9 @@ function blockerAmong(batch: EventBatch, candidates: EventBatch[]): Blocker | nu
 async function check(batchId: string): Promise<{ batch?: EventBatch; result: UndoCheck }> {
   const batch = await db.eventBatches.get(batchId);
   if (!batch) return { result: { ok: false, reason: MISSING } };
-  if (batch.undoneAt) {
-    return { batch, result: { ok: false, reason: ALREADY_UNDONE } };
-  }
-  if (isPermanent(batch)) return { batch, result: { ok: false, reason: PERMANENT } };
-  if (batch.snapshotId && !(await hasSnapshot(batch.snapshotId))) {
-    return { batch, result: { ok: false, reason: SNAPSHOT_GONE } };
-  }
+  const snapshotKept = batch.snapshotId ? await hasSnapshot(batch.snapshotId) : true;
+  const reason = fixedReason(batch, snapshotKept, await historyClearedBefore());
+  if (reason) return { batch, result: { ok: false, reason } };
   return { batch, result: checkFor(await findBlocker(batch)) };
 }
 
@@ -117,16 +138,47 @@ export async function checkUndoAll(batches: EventBatch[]): Promise<Map<string, U
   const stored = await db.eventBatches.where("createdAt").aboveOrEqual(oldest).toArray();
   const byId = new Map(stored.map((b) => [b.id, b]));
   const snapshots = stored.some((b) => b.snapshotId) ? await snapshotIds() : new Set<string>();
+  const clearedBefore = await historyClearedBefore();
   for (const { id } of batches) {
     const batch = byId.get(id);
-    if (!batch) checks.set(id, { ok: false, reason: MISSING });
-    else if (batch.undoneAt) checks.set(id, { ok: false, reason: ALREADY_UNDONE });
-    else if (isPermanent(batch)) checks.set(id, { ok: false, reason: PERMANENT });
-    else if (batch.snapshotId && !snapshots.has(batch.snapshotId)) {
-      checks.set(id, { ok: false, reason: SNAPSHOT_GONE });
-    } else checks.set(id, checkFor(blockerAmong(batch, stored)));
+    if (!batch) {
+      checks.set(id, { ok: false, reason: MISSING });
+      continue;
+    }
+    const snapshotKept = batch.snapshotId ? snapshots.has(batch.snapshotId) : true;
+    const reason = fixedReason(batch, snapshotKept, clearedBefore);
+    checks.set(id, reason ? { ok: false, reason } : checkFor(blockerAmong(batch, stored)));
   }
   return checks;
+}
+
+/** Thrown inside undo's transaction to roll it back and refuse with a plain reason. */
+class UndoRefused extends Error {}
+
+/**
+ * Puts one record back as it was before `change`, stamping `updatedAt` with `t`. A whole-row
+ * image (older batches, and removals) replaces the row; a compact update restores just its
+ * listed fields on the current row, which matches the change's `after` image in every other
+ * field because no later, not-undone change touched the record.
+ */
+async function revert(change: Change, t: string): Promise<void> {
+  const table = db.table<Record<string, unknown>, string>(change.table);
+  if (change.before === null) {
+    await table.delete(change.id);
+    return;
+  }
+  if (!change.fields || change.after === null) {
+    await table.put({ ...change.before, updatedAt: t });
+    return;
+  }
+  const current = await table.get(change.id);
+  if (!current) throw new UndoRefused(RECORD_GONE);
+  const next = { ...current };
+  for (const field of change.fields) {
+    if (change.before[field] === undefined) delete next[field];
+    else next[field] = change.before[field];
+  }
+  await table.put({ ...next, updatedAt: t });
 }
 
 /**
@@ -151,21 +203,22 @@ export async function undoBatch(batchId: string): Promise<UndoResult> {
     db.eventBatches,
     db.settings,
   ];
-  return db.transaction("rw", tables, async (): Promise<UndoResult> => {
-    // Check again inside the transaction so a change made meanwhile cannot slip through.
-    const again = await check(batchId);
-    if (!again.result.ok) return again.result;
+  try {
+    return await db.transaction("rw", tables, async (): Promise<UndoResult> => {
+      // Check again inside the transaction so a change made meanwhile cannot slip through.
+      const again = await check(batchId);
+      if (!again.result.ok) return again.result;
 
-    const t = nowIso();
-    for (const change of [...batch.changes].reverse()) {
-      const table = db.table(change.table);
-      if (change.before === null) await table.delete(change.id);
-      else await table.put({ ...change.before, updatedAt: t });
-    }
-    await db.eventBatches.update(batch.id, { undoneAt: t, updatedAt: t });
-    if (batch.source !== "sample") await bumpChangesSinceBackup();
-    return { ok: true, summary: `Undid: ${batch.summary}` };
-  });
+      const t = nowIso();
+      for (const change of [...batch.changes].reverse()) await revert(change, t);
+      await db.eventBatches.update(batch.id, { undoneAt: t, updatedAt: t });
+      if (batch.source !== "sample") await bumpChangesSinceBackup();
+      return { ok: true, summary: `Undid: ${batch.summary}` };
+    });
+  } catch (err) {
+    if (err instanceof UndoRefused) return { ok: false, reason: err.message };
+    throw err;
+  }
 }
 
 /**

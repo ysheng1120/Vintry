@@ -3,9 +3,11 @@ import { changelogEntry, changelogNewestFirst } from "./changelog";
 
 describe("changelog", () => {
   it("keeps 1.2.0 and its user-visible additions, and earlier releases", () => {
-    const [newest, v140, previous, older] = changelogNewestFirst();
-    expect(newest?.version).toBe("1.5.0");
-    expect(newest?.changes.join("\n")).toMatch(/CellarTracker/);
+    const [newest, v150, v140, previous, older] = changelogNewestFirst();
+    expect(newest?.version).toBe("1.6.0");
+    expect(newest?.changes.join("\n")).toMatch(/History/);
+    expect(v150?.version).toBe("1.5.0");
+    expect(v150?.changes.join("\n")).toMatch(/CellarTracker/);
     expect(v140?.version).toBe("1.4.0");
     expect(v140?.changes.join("\n")).toMatch(/Suggested price/);
     expect(v140?.changes.join("\n")).toMatch(/location/);

@@ -144,6 +144,10 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "text",
         text: "Every change shows a message with an Undo button. You can also undo from More → History, as long as no later change touched the same wine.",
       },
+      {
+        kind: "text",
+        text: "History keeps every change from the last 90 days, and always at least your latest 500 changes, so it doesn't fill up your computer or your backups. Older changes are cleared when Vintry starts, and cleared changes can't be undone. When a wine is deleted forever, its details are also wiped from History: those changes stay listed as \"a removed wine\" but can't be undone.",
+      },
     ],
     links: [{ to: "/history", label: "History" }],
   },

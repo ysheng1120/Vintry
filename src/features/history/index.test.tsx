@@ -8,7 +8,8 @@ import { resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import { consumeBottles } from "../../domain/commands/consumption";
 import { loadSampleCellar } from "../../domain/commands/sample";
-import { addBottles, deleteWine } from "../../domain/commands/wines";
+import { addBottles, deleteWine, purgeDeleted } from "../../domain/commands/wines";
+import { HISTORY_KEEP_AT_LEAST, pruneHistory } from "../../domain/historyRetention";
 import { formatDate } from "../../lib/format";
 import HistoryPage from "./index";
 
@@ -127,6 +128,57 @@ describe("HistoryPage", () => {
     expect(within(dialog).getByText(/removed for good/i)).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete forever" }));
     await waitFor(async () => expect(await db.wines.get(wine.id)).toBeUndefined());
+  });
+
+  it("says when older changes were cleared, and keeps offering undo for the kept ones", async () => {
+    setClock("2026-01-01T09:00:00Z");
+    for (let i = 0; i < 3; i++) {
+      await addBottles({
+        drafts: [{ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 1 }] }],
+      });
+    }
+    setClock("2026-09-28T09:00:00Z");
+    await db.eventBatches.bulkAdd(
+      Array.from({ length: HISTORY_KEEP_AT_LEAST }, (_, i) => ({
+        id: `b${i}`,
+        createdAt: `2026-09-${String(10 + (i % 18)).padStart(2, "0")}T09:00:00.000Z`,
+        updatedAt: "2026-09-10T09:00:00.000Z",
+        source: "user" as const,
+        command: "test",
+        summary: `Change ${i}`,
+        changes: [],
+        undoneAt: null,
+        snapshotId: null,
+      })),
+    );
+    expect(await pruneHistory()).toBe(3);
+
+    renderHistory();
+    expect(
+      await screen.findByText(/Changes up to .* have been cleared and can no longer be undone/),
+    ).toHaveTextContent(formatDate("2026-01-01T09:00:00Z"));
+    const row = await findRowFor("Change 1");
+    await waitFor(() =>
+      expect(within(row).getByRole("button", { name: "Undo" })).not.toBeDisabled(),
+    );
+  });
+
+  it("does not offer undo of a change to a wine deleted forever", async () => {
+    await addBottles({
+      drafts: [{ producer: "Ridge", vintage: 2019, colour: "red", lots: [{ quantity: 3 }] }],
+    });
+    const wine = (await db.wines.toArray())[0]!;
+    await deleteWine({ wineId: wine.id });
+    await purgeDeleted({ wineId: wine.id });
+
+    renderHistory();
+    const addRow = await findRowFor("Added 3 bottles of a removed wine");
+    const undoButton = within(addRow).getByRole("button", { name: "Undo" });
+    await waitFor(() =>
+      expect(undoButton).toHaveAttribute("title", expect.stringContaining("deleted forever")),
+    );
+    expect(undoButton).toBeDisabled();
+    expect(screen.queryByText(/Ridge 2019/)).not.toBeInTheDocument();
   });
 
   it("shows empty messages for each tab with nothing to show", async () => {

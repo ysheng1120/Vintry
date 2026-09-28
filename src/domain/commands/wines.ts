@@ -5,7 +5,8 @@ import { nowIso } from "../clock";
 import type { ChangeSet } from "../events";
 import { bottles, wineLabel } from "../labels";
 import { buildWineMatcher, normalizeName } from "../match";
-import { LotSchema, WineSchema, type EventSource, type Wine } from "../types";
+import { scrubHistory } from "../historyRetention";
+import { LotSchema, WineSchema, type EventSource, type RecordTableName, type Wine } from "../types";
 import { allowedWindowSource } from "../window";
 import {
   cleanPatch,
@@ -315,13 +316,21 @@ export const purgeDeletedCommand = defineCommand({
       const cutoff = new Date(Date.parse(nowIso()) - olderThanDays * 86_400_000).toISOString();
       stale = (await db.wines.toArray()).filter((w) => w.deletedAt && w.deletedAt < cutoff);
     }
+    // Every removed record, so no copy of it stays in the history (or in backups made later).
+    const removed = new Set<string>();
+    const forget = async (table: RecordTableName, id: string) => {
+      await changes.remove(table, id);
+      changes.forget(table, id);
+      removed.add(`${table}:${id}`);
+    };
     for (const wine of stale) {
       for (const table of ["lots", "consumptions", "tastingNotes"] as const) {
         const ids = await db.table(table).where("wineId").equals(wine.id).primaryKeys();
-        for (const id of ids) await changes.remove(table, String(id));
+        for (const id of ids) await forget(table, String(id));
       }
-      await changes.remove("wines", wine.id);
+      await forget("wines", wine.id);
     }
+    await scrubHistory(removed, stale);
     return { summary: `Permanently removed ${pluralize(stale.length, "deleted wine")}` };
   },
 });
