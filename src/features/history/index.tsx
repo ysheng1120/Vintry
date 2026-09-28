@@ -4,35 +4,58 @@ import { SkeletonText } from "../../components/ui/Skeleton";
 import { Tabs } from "../../components/ui/Tabs";
 import { bottles } from "../../domain/labels";
 import { getHistory, useRecentlyDeleted } from "../../domain/selectors";
+import {
+  HISTORY_KEEP_AT_LEAST,
+  HISTORY_KEEP_DAYS,
+  historyClearedBefore,
+} from "../../domain/historyRetention";
 import { checkUndoAll } from "../../domain/undo";
 import { formatDate } from "../../lib/format";
 import { useConsumptionLog } from "./consumptionLog";
 import { DeletedRow } from "./DeletedRow";
 import { HistoryRow } from "./HistoryRow";
 
-/** The history list with each batch's undo check, recomputed whenever the history changes. */
+/**
+ * The history list with each batch's undo check, and when retention last cleared old changes,
+ * recomputed whenever the history changes.
+ */
 function useHistoryWithChecks() {
   return useLiveQuery(async () => {
     const history = await getHistory();
-    return { history, checks: await checkUndoAll(history) };
+    const clearedBefore = await historyClearedBefore();
+    return { history, clearedBefore, checks: await checkUndoAll(history) };
   }, []);
+}
+
+/** Says that older changes were cleared from History (`pruneHistory`) and can't be undone. */
+function ClearedNote({ clearedBefore }: { clearedBefore: string }) {
+  return (
+    <p className="mt-4 text-sm text-ink-muted">
+      Changes up to {formatDate(clearedBefore)} have been cleared and can no longer be undone.
+      History keeps the last {HISTORY_KEEP_DAYS} days, and always your latest{" "}
+      {HISTORY_KEEP_AT_LEAST} changes.
+    </p>
+  );
 }
 
 function AllChanges() {
   const loaded = useHistoryWithChecks();
   if (loaded === undefined) return <SkeletonText lines={5} />;
-  const { history, checks } = loaded;
+  const { history, checks, clearedBefore } = loaded;
   if (history.length === 0) {
     return (
       <p className="text-ink-muted">No changes yet. Adds, drinks, moves and edits appear here.</p>
     );
   }
   return (
-    <ul>
-      {history.map((batch) => (
-        <HistoryRow key={batch.id} batch={batch} check={checks.get(batch.id)} />
-      ))}
-    </ul>
+    <>
+      <ul>
+        {history.map((batch) => (
+          <HistoryRow key={batch.id} batch={batch} check={checks.get(batch.id)} />
+        ))}
+      </ul>
+      {clearedBefore && <ClearedNote clearedBefore={clearedBefore} />}
+    </>
   );
 }
 

@@ -268,18 +268,32 @@ export const TABLE_NAMES = [
 /** Tables whose rows are cellar records that commands change and undo can restore. */
 export type RecordTableName = (typeof TABLE_NAMES)[number];
 
-/** One record change inside an event batch. `before` null = created, `after` null = removed. */
+/**
+ * One record change inside an event batch. `before` null = created, `after` null = removed.
+ *
+ * Older changes (and every insert or removal) hold whole rows. An update written by this version
+ * on holds only what changed: `fields` lists the changed fields, and `before` and `after` keep
+ * those fields plus `id`, `updatedAt` and the fields that point at other records (a field listed
+ * in `fields` but missing from an image was absent from that row). Undo then restores just those
+ * fields on the current row (see `undo.ts`).
+ */
 export const ChangeSchema = z.object({
   table: z.enum(TABLE_NAMES),
   id: z.string().min(1),
   before: z.record(z.string(), z.unknown()).nullable(),
   after: z.record(z.string(), z.unknown()).nullable(),
+  fields: z.array(z.string()).optional(),
+  /**
+   * True when the record was deleted forever: its copies were wiped from the history, leaving
+   * only its id and the ids it pointed at. A batch holding such a change can't be undone.
+   */
+  scrubbed: z.literal(true).optional(),
 });
 export type Change = z.infer<typeof ChangeSchema>;
 
 /**
- * One user-visible change (a command run). Undo restores every `before` image when each touched
- * record still matches its `after` image's `updatedAt` (KTD7).
+ * One user-visible change (a command run). Undo restores every `before` image when no later
+ * change that is not itself undone touched the same records (KTD7, see `undo.ts`).
  */
 export const EventBatchSchema = z.object({
   ...base,

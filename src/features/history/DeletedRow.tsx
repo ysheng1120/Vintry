@@ -64,7 +64,7 @@ export function DeletedRow({ item }: { item: DeletedWine }) {
       <ConfirmDialog
         open={confirming}
         title={`Delete ${wineLabel(item.wine)} forever?`}
-        description="The wine and its bottles, drinks, and notes will be removed for good."
+        description="The wine and its bottles, drinks, and notes will be removed for good, and wiped from History."
         confirmLabel="Delete forever"
         tone="danger"
         busy={busy}

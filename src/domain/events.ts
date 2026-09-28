@@ -25,12 +25,77 @@ type AnyRow = { id: string; updatedAt: string } & Record<string, unknown>;
 
 const tableOf = (name: RecordTableName) => db.table<AnyRow, string>(name);
 
+/** Fields that point at another record, used by undo and by `touchedFromChanges`. */
+export const REFERENCE_FIELDS: Record<string, RecordTableName> = {
+  wineId: "wines",
+  lotId: "lots",
+  locationId: "locations",
+  consumptionId: "consumptions",
+};
+
+type Row = Record<string, unknown>;
+
+/** Structural equality for row values (JSON-like: primitives, arrays, plain objects). */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const defined = (row: Row) => Object.keys(row).filter((k) => row[k] !== undefined);
+  const aKeys = defined(a as Row);
+  if (aKeys.length !== defined(b as Row).length) return false;
+  return aKeys.every((k) => sameValue((a as Row)[k], (b as Row)[k]));
+}
+
+/** What every compact or scrubbed image keeps: the id and the records the row points at. */
+function keyFields(row: Row): Row {
+  const out: Row = { id: row.id };
+  for (const field of Object.keys(REFERENCE_FIELDS)) {
+    if (row[field] !== undefined) out[field] = row[field];
+  }
+  return out;
+}
+
+function pick(row: Row, fields: readonly string[]): Row {
+  const out: Row = { ...keyFields(row), updatedAt: row.updatedAt };
+  for (const field of fields) if (row[field] !== undefined) out[field] = row[field];
+  return out;
+}
+
+/**
+ * An update stored compactly (see `ChangeSchema`): only the fields whose value changed, plus
+ * `id`, `updatedAt` and the reference fields. Unchanged large fields such as a wine's label image
+ * are left out, so editing a wine's notes no longer stores two copies of the image.
+ */
+export function compactUpdate(table: RecordTableName, id: string, before: Row, after: Row): Change {
+  const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+    (field) => field !== "id" && field !== "updatedAt" && !sameValue(before[field], after[field]),
+  );
+  return { table, id, before: pick(before, fields), after: pick(after, fields), fields };
+}
+
+/**
+ * A change with the record's copies wiped, for a record deleted forever: only its id and the ids
+ * it pointed at stay, so the history still knows what the change touched (undo's conflict check
+ * relies on that). A batch holding a scrubbed change can't be undone.
+ */
+export function scrubChange(change: Change): Change {
+  return {
+    table: change.table,
+    id: change.id,
+    before: change.before && keyFields(change.before),
+    after: change.after && keyFields(change.after),
+    scrubbed: true,
+  };
+}
+
 /**
  * Records every write a command makes, so the event batch holds a before and after image of
- * each touched record (KTD4, KTD7). Use it inside the command's transaction.
+ * each touched record (KTD4, KTD7): whole rows for inserts and removals, only what changed for
+ * updates (`compactUpdate`). Use it inside the command's transaction.
  */
 export class ChangeSet {
   private readonly changes = new Map<string, Change>();
+  private readonly forgotten = new Set<string>();
 
   private record(table: RecordTableName, id: string, before: AnyRow | null, after: AnyRow | null) {
     const key = `${table}:${id}`;
@@ -75,8 +140,21 @@ export class ChangeSet {
     this.record(table, id, before, null);
   }
 
+  /** Keeps no copy of this record in the batch (`scrubChange`), for records removed for good. */
+  forget(table: RecordTableName, id: string): void {
+    this.forgotten.add(`${table}:${id}`);
+  }
+
   list(): Change[] {
-    return [...this.changes.values()].filter((c) => c.before !== null || c.after !== null);
+    const out: Change[] = [];
+    for (const [key, change] of this.changes) {
+      const { table, id, before, after } = change;
+      if (before === null && after === null) continue;
+      if (this.forgotten.has(key)) out.push(scrubChange(change));
+      else if (before && after) out.push(compactUpdate(table, id, before, after));
+      else out.push(change);
+    }
+    return out;
   }
 }
 
@@ -97,14 +175,6 @@ const TOUCHED_KEY: Record<RecordTableName, keyof Touched> = {
   tastingNotes: "tastingNoteIds",
   locations: "locationIds",
   wishlist: "wishlistIds",
-};
-
-/** Fields that point at another record, used by undo and by `touchedFromChanges`. */
-export const REFERENCE_FIELDS: Record<string, RecordTableName> = {
-  wineId: "wines",
-  lotId: "lots",
-  locationId: "locations",
-  consumptionId: "consumptions",
 };
 
 /** Records referenced by a row image, for example a lot's wine and location. */
