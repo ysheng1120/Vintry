@@ -16,14 +16,26 @@ import { CURRENT_SCHEMA_VERSION } from "../src/db/migrations.ts";
 export const BACKUP_ROUTE = "/__vintry/backup";
 export const STATUS_ROUTE = "/__vintry/backup/status";
 
-/** How many automatic backup files stay in the folder. */
-export const AUTO_BACKUPS_KEPT = 30;
+// Which automatic backup files stay in the folder. A file kept by any tier survives; every other
+// automatic backup file is deleted. One shared pool of "the newest N" is not enough: every
+// browser writes here about a minute after each change and when its tab closes, so a second
+// browser or a test profile could push every good backup out within minutes. The calendar tiers
+// can't be flooded that way: however many files land today, older days keep their file.
+// At most 20 + 14 + 8 + 12 = 54 files, usually fewer because the tiers overlap.
+/** The newest files, whatever their date: undo for the last few sessions of changes. */
+export const RECENT_BACKUPS_KEPT = 20;
+/** The newest file of each of the last 14 calendar days (today included): two weeks, by day. */
+export const DAILY_BACKUPS_KEPT = 14;
+/** The newest file of each of the last 8 ISO weeks (this week included): about two months. */
+export const WEEKLY_BACKUPS_KEPT = 8;
+/** The newest file of each of the last 12 calendar months (this month included): a year. */
+export const MONTHLY_BACKUPS_KEPT = 12;
 /** Largest backup body accepted. */
 export const MAX_BACKUP_BYTES = 50 * 1024 * 1024;
 
 const FOLDER_NAME = "Vintry Backups";
 /** Only files with exactly this name are ever counted, compared, or deleted. */
-const BACKUP_NAME_PATTERN = /^vintry-backup-\d{4}-\d{2}-\d{2}-\d{6}\.json$/;
+const BACKUP_NAME_PATTERN = /^vintry-backup-(\d{4})-(\d{2})-(\d{2})-\d{6}\.json$/;
 
 // The launcher's own address, by name and by number. Checking Host guards against DNS
 // rebinding (another site's name pointed at 127.0.0.1); checking Origin guards against other
@@ -73,9 +85,10 @@ export function resolveBackupDir(
   return join(home, FOLDER_NAME);
 }
 
+const two = (n: number) => String(n).padStart(2, "0");
+
 /** The server's own file name for a backup, in local time: vintry-backup-2026-09-27-143005.json. */
 export function autoBackupFileName(date: Date): string {
-  const two = (n: number) => String(n).padStart(2, "0");
   const day = `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
   const time = `${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
   return `vintry-backup-${day}-${time}.json`;
@@ -139,6 +152,73 @@ function readBody(req: IncomingMessage, limit: number): Promise<string> {
   });
 }
 
+const DAY_MS = 86_400_000;
+
+/** A calendar date as "YYYY-MM-DD". `utc` holds the date at midnight UTC. */
+function dayKey(utc: Date): string {
+  return `${utc.getUTCFullYear()}-${two(utc.getUTCMonth() + 1)}-${two(utc.getUTCDate())}`;
+}
+
+/** The ISO week a calendar date falls in, as "YYYY-Www" (weeks start on Monday). */
+function isoWeekKey(utc: Date): string {
+  const thursday = new Date(utc.getTime() + (4 - (utc.getUTCDay() || 7)) * DAY_MS);
+  const year = thursday.getUTCFullYear();
+  const week = Math.floor((thursday.getTime() - Date.UTC(year, 0, 1)) / DAY_MS / 7) + 1;
+  return `${year}-W${two(week)}`;
+}
+
+/** A month counted from year 0, so months compare and subtract as numbers. */
+function monthIndex(utc: Date): number {
+  return utc.getUTCFullYear() * 12 + utc.getUTCMonth();
+}
+
+/**
+ * The automatic backup files to keep out of `names`, by the tiers above. Dates come from the
+ * server's own file names, which are in local time, never from file times; `now` is read in
+ * local time too. Names that aren't automatic backup files are never in the result, and never
+ * pruned either (see backupsToPrune).
+ */
+export function selectBackupsToKeep(names: readonly string[], now: Date): Set<string> {
+  const backups = names
+    .flatMap((name) => {
+      const match = BACKUP_NAME_PATTERN.exec(name);
+      if (!match) return [];
+      const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      return [{ name, date }];
+    })
+    // Newest first: the names sort by time.
+    .sort((a, b) => (a.name < b.name ? 1 : a.name > b.name ? -1 : 0));
+
+  const keep = new Set(backups.slice(0, RECENT_BACKUPS_KEPT).map(({ name }) => name));
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const daysBefore = (days: number) => new Date(today.getTime() - days * DAY_MS);
+
+  // Each calendar tier keeps the newest file of every period from its first period on. Keys
+  // compare as text ("2026-09-27", "2026-W39") or as numbers (months). A file dated after `now`
+  // (the clock was set back) is kept as well: keeping too much is the safe side.
+  const tiers: { key: (date: Date) => string | number; from: string | number }[] = [
+    { key: dayKey, from: dayKey(daysBefore(DAILY_BACKUPS_KEPT - 1)) },
+    { key: isoWeekKey, from: isoWeekKey(daysBefore((WEEKLY_BACKUPS_KEPT - 1) * 7)) },
+    { key: monthIndex, from: monthIndex(today) - (MONTHLY_BACKUPS_KEPT - 1) },
+  ];
+  for (const { key, from } of tiers) {
+    const seen = new Set<string | number>();
+    for (const { name, date } of backups) {
+      const period = key(date);
+      if (period < from || seen.has(period)) continue;
+      seen.add(period);
+      keep.add(name);
+    }
+  }
+  return keep;
+}
+
+/** The automatic backup files in `names` that no tier keeps. Other names are never included. */
+export function backupsToPrune(names: readonly string[], now: Date): string[] {
+  const keep = selectBackupsToKeep(names, now);
+  return names.filter((name) => BACKUP_NAME_PATTERN.test(name) && !keep.has(name));
+}
+
 /** Names of the automatic backup files in `dir`, oldest first (the names sort by time). */
 async function listBackupNames(dir: string): Promise<string[]> {
   let entries;
@@ -171,13 +251,31 @@ function withoutTimestamp(backup: Record<string, unknown>): string {
   return JSON.stringify({ ...backup, exportedAt: null });
 }
 
-async function sameAsSaved(path: string, backup: Record<string, unknown>): Promise<boolean> {
+/**
+ * How many of the collector's own wines a backup holds: sample wines don't count, wines in the
+ * bin (soft-deleted, still restorable) do. 0 for a file that isn't shaped like a backup.
+ */
+function ownWineCount(backup: Record<string, unknown>): number {
+  const data = backup.data;
+  if (typeof data !== "object" || data === null) return 0;
+  const wines = (data as Record<string, unknown>).wines;
+  if (!Array.isArray(wines)) return 0;
+  return wines.filter(
+    (wine) =>
+      typeof wine === "object" &&
+      wine !== null &&
+      (wine as { isSample?: unknown }).isSample !== true,
+  ).length;
+}
+
+/** A saved backup file as an object, or null when it can't be read or parsed. */
+async function readSaved(path: string): Promise<Record<string, unknown> | null> {
   try {
     const saved = JSON.parse(await readFile(path, "utf8")) as unknown;
-    if (typeof saved !== "object" || saved === null || Array.isArray(saved)) return false;
-    return withoutTimestamp(saved as Record<string, unknown>) === withoutTimestamp(backup);
+    if (typeof saved !== "object" || saved === null || Array.isArray(saved)) return null;
+    return saved as Record<string, unknown>;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -210,29 +308,44 @@ async function writeAtomically(dir: string, name: string, text: string): Promise
   }
 }
 
-/** Deletes automatic backup files past the newest 30. Never touches any other file. */
-async function pruneBackups(dir: string): Promise<void> {
-  const names = await listBackupNames(dir);
-  for (const name of names.slice(0, Math.max(0, names.length - AUTO_BACKUPS_KEPT))) {
+/** Deletes the automatic backup files no tier keeps. Never touches any other file. */
+async function pruneBackups(dir: string, now: Date): Promise<void> {
+  for (const name of backupsToPrune(await listBackupNames(dir), now)) {
     await unlink(join(dir, name)).catch(() => {});
   }
 }
 
+/** Why a backup was not written: it matched the newest file, or it was empty and that wasn't. */
+export type SkipReason = "unchanged" | "empty";
+
 /**
- * Saves `backup` unless it matches the newest saved file apart from its exported-at time.
- * The file name comes from the clock only, never from the request.
+ * Saves `backup` unless it matches the newest saved file apart from its exported-at time, or it
+ * holds none of the collector's own wines while the newest saved file does. The second rule
+ * keeps an empty cellar (a new browser profile, a test profile with only the sample wines, a
+ * wiped database) from filling the folder and pushing good backups out: the newest file stays
+ * the last one with wines in it. An empty backup is still saved into a folder with no backups
+ * yet, or when the newest file is empty too. The file name comes from the clock only, never
+ * from the request.
  */
 export async function saveBackup(
   dir: string,
   backup: Record<string, unknown>,
   now: Date = new Date(),
-): Promise<{ written: boolean }> {
+): Promise<{ written: boolean; skipped?: SkipReason }> {
   await mkdir(dir, { recursive: true });
   const newest = (await listBackupNames(dir)).at(-1);
-  if (newest && (await sameAsSaved(join(dir, newest), backup))) return { written: false };
+  const saved = newest ? await readSaved(join(dir, newest)) : null;
+  if (saved) {
+    if (withoutTimestamp(saved) === withoutTimestamp(backup)) {
+      return { written: false, skipped: "unchanged" };
+    }
+    if (ownWineCount(backup) === 0 && ownWineCount(saved) > 0) {
+      return { written: false, skipped: "empty" };
+    }
+  }
   await writeAtomically(dir, autoBackupFileName(now), JSON.stringify(backup, null, 2));
   try {
-    await pruneBackups(dir);
+    await pruneBackups(dir, now);
   } catch {
     // The new backup is saved; failing to tidy older copies is not a failed backup.
   }
@@ -270,7 +383,7 @@ export function createAutoBackupMiddleware({
   dir,
   now = () => new Date(),
 }: AutoBackupOptions): Middleware {
-  // One save at a time, so "same as the newest file" and pruning never race each other.
+  // One save at a time, so comparing with the newest file and pruning never race each other.
   let queue: Promise<unknown> = Promise.resolve();
   const serially = <T>(task: () => Promise<T>): Promise<T> => {
     const run = queue.then(task, task);
@@ -311,8 +424,8 @@ export function createAutoBackupMiddleware({
       return;
     }
     try {
-      const { written } = await serially(() => saveBackup(dir, backup, now()));
-      sendJson(res, 200, { written, ...(await readStatus(dir)) });
+      const result = await serially(() => saveBackup(dir, backup, now()));
+      sendJson(res, 200, { ...result, ...(await readStatus(dir)) });
     } catch (error) {
       sendJson(res, (error as NodeJS.ErrnoException).code === "ENOSPC" ? 507 : 500, {
         error: describeWriteError(error),
