@@ -6,6 +6,7 @@ import { resetDatabase } from "../../db/testing";
 import { importRows } from "../../domain/commands";
 import { undoBatch } from "../../domain/undo";
 import { decodeCsvBytes, parseCsvFile, parseCsvText } from "../../lib/csv";
+import { draftsToImport, planImportRows } from "./duplicates";
 import { detectImportSource, presetMapping } from "./presets";
 import { buildImportRows } from "./rows";
 
@@ -161,6 +162,118 @@ describe("import fixtures", () => {
     const { headers } = parseCsvFile(readFixture("generic.csv"));
     expect(detectImportSource(headers)).toBe("generic");
     expect(presetMapping("generic", headers)).toEqual({});
+  });
+});
+
+describe("re-importing an updated CellarTracker export", () => {
+  beforeEach(resetDatabase);
+
+  const HEADERS = "iWine,Producer,Wine,Vintage,Color,Quantity,Location,Bin,Price,Currency\n";
+  const csv = (lines: string[]) => HEADERS + lines.join("\n") + "\n";
+
+  function preview(text: string) {
+    const { headers, rows } = parseCsvText(text);
+    const source = detectImportSource(headers);
+    expect(source).toBe("cellartracker");
+    return buildImportRows(rows, {
+      source,
+      mapping: presetMapping(source, headers),
+      defaultLocationId: null,
+      defaultCurrency: null,
+    });
+  }
+
+  /** Builds the rows against the live cellar and plans them the way the import page does. */
+  async function plannedImport(text: string, included = new Set<number>()) {
+    const locations = (await db.locations.toArray()).map((l) => ({ id: l.id, name: l.name }));
+    const { headers, rows } = parseCsvText(text);
+    const source = detectImportSource(headers);
+    const built = buildImportRows(rows, {
+      source,
+      mapping: presetMapping(source, headers),
+      defaultLocationId: null,
+      defaultCurrency: null,
+      locations,
+    });
+    const cellar = {
+      wines: await db.wines.toArray(),
+      lots: await db.lots.toArray(),
+      locations,
+    };
+    const plans = planImportRows(built.rows, cellar, { compareCounts: true });
+    const kept = draftsToImport(built.rows, plans, included);
+    return { built, plans, kept };
+  }
+
+  const FIRST = csv([
+    "100001,Ridge,Ridge Monte Bello,2019,Red,6,Cellar,A1,250,USD",
+    "100002,Krug,Krug Grande Cuvée,1001,White,6,Cellar,B2,180,GBP",
+  ]);
+
+  it("keeps CellarTracker's wine id on the wines it creates", async () => {
+    const first = preview(FIRST);
+    expect(first.drafts.map((d) => d.cellarTrackerId)).toEqual(["100001", "100002"]);
+    await importRows({ rows: first.drafts, newLocations: first.newLocations });
+    const wines = await db.wines.toArray();
+    expect(wines.map((w) => w.cellarTrackerId).sort()).toEqual(["100001", "100002"]);
+  });
+
+  it("adds only the new bottle, leaves out a row with fewer, and one undo removes the top-up", async () => {
+    const first = preview(FIRST);
+    await importRows({ rows: first.drafts, newLocations: first.newLocations });
+    expect(await db.lots.count()).toBe(2);
+
+    // In CellarTracker: one more Monte Bello bought, two Krug drunk; Monte Bello renamed in Vintry.
+    const ridge = (await db.wines.toArray()).find((w) => w.producer === "Ridge")!;
+    await db.wines.update(ridge.id, { name: "Monte Bello (estate)" });
+    const { plans, kept } = await plannedImport(
+      csv([
+        "100001,Ridge,Ridge Monte Bello,2019,Red,7,Cellar,A1,250,USD",
+        "100002,Krug,Krug Grande Cuvée,1001,White,4,Cellar,B2,180,GBP",
+      ]),
+    );
+    expect(plans.get(0)).toEqual({ kind: "topUp", add: 1, have: 6 });
+    expect(plans.get(1)).toEqual({ kind: "fewer", have: 6, file: 4 });
+    expect(kept).toHaveLength(1);
+
+    const result = await importRows({ rows: kept.map((k) => k.draft) });
+    expect(result.summary).toBe("Imported 1 wine (1 bottle)");
+    expect(await db.wines.count()).toBe(2);
+    const ridgeLots = await db.lots.where("wineId").equals(ridge.id).toArray();
+    expect(ridgeLots.map((l) => l.quantity).sort()).toEqual([1, 6]);
+    const krug = (await db.wines.toArray()).find((w) => w.producer === "Krug")!;
+    const krugLots = await db.lots.where("wineId").equals(krug.id).toArray();
+    expect(krugLots.map((l) => l.quantity)).toEqual([6]);
+
+    const undone = await undoBatch(result.batchId!);
+    expect(undone.ok).toBe(true);
+    const after = await db.lots.where("wineId").equals(ridge.id).toArray();
+    expect(after.map((l) => l.quantity)).toEqual([6]);
+    expect(await db.wines.count()).toBe(2);
+  });
+
+  it("imports the whole row when included anyway", async () => {
+    const first = preview(FIRST);
+    await importRows({ rows: first.drafts, newLocations: first.newLocations });
+    const { kept } = await plannedImport(
+      csv(["100001,Ridge,Ridge Monte Bello,2019,Red,7,Cellar,A1,250,USD"]),
+      new Set([0]),
+    );
+    const result = await importRows({ rows: kept.map((k) => k.draft) });
+    expect(result.summary).toBe("Imported 1 wine (7 bottles)");
+  });
+
+  it("records CellarTracker's id on a wine that had none when a row joins it", async () => {
+    await importRows({
+      rows: [{ producer: "Ridge", name: "Monte Bello", vintage: 2019, colour: "red", lots: [] }],
+    });
+    const { built, kept } = await plannedImport(
+      csv(["100001,Ridge,Ridge Monte Bello,2019,Red,2,Cellar,A1,250,USD"]),
+    );
+    await importRows({ rows: kept.map((k) => k.draft), newLocations: built.newLocations });
+    const wines = await db.wines.toArray();
+    expect(wines).toHaveLength(1);
+    expect(wines[0]?.cellarTrackerId).toBe("100001");
   });
 });
 

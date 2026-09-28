@@ -17,7 +17,14 @@ import { useLocations } from "../../domain/selectors";
 import { parseCsvFile } from "../../lib/csv";
 import { errorMessage, useCommandFeedback } from "../../app/commandFeedback";
 import { NEW_LOCATION } from "../add/draft";
-import { findDuplicateRowIndexes, shouldImportRow, type ExistingCellar } from "./duplicates";
+import {
+  draftsToImport,
+  leftOutRowIndexes,
+  planImportRows,
+  rowPlanLabel,
+  type ExistingCellar,
+  type RowPlan,
+} from "./duplicates";
 import { MappingEditor } from "./MappingEditor";
 import { detectImportSource, presetMapping, type CsvMapping, type ImportSourceId } from "./presets";
 import { buildImportRows, type ImportPreview } from "./rows";
@@ -32,6 +39,12 @@ interface ParsedFile {
 
 const ACCEPT = ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain";
 
+/**
+ * Stands in for a default location the collector typed but Vintry doesn't have yet, while
+ * planning the preview: rows put there can't match bottles already in the cellar.
+ */
+const NEW_DEFAULT_LOCATION = "new-default-location";
+
 function describeWineForRow(draft: NonNullable<ImportPreview["rows"][number]["draft"]>): string {
   const year = draft.vintage == null ? "NV" : String(draft.vintage);
   return [draft.producer, draft.name, year].filter(Boolean).join(" ");
@@ -39,7 +52,7 @@ function describeWineForRow(draft: NonNullable<ImportPreview["rows"][number]["dr
 
 /** The new locations that the given rows put bottles in: rows left out create none. */
 function newLocationsUsedBy(
-  rows: ImportPreview["rows"],
+  rows: { draft: ImportPreview["rows"][number]["draft"] }[],
   newLocations: ImportPreview["newLocations"],
 ): ImportPreview["newLocations"] {
   const used = new Set(rows.flatMap((row) => row.draft?.lots?.map((lot) => lot.locationId) ?? []));
@@ -75,7 +88,7 @@ export default function ImportPage() {
   const [currency, setCurrency] = useState("GBP");
 
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [duplicateRowIndexes, setDuplicateRowIndexes] = useState<Set<number>>(new Set());
+  const [plans, setPlans] = useState<Map<number, RowPlan>>(new Map());
   const [includedDuplicates, setIncludedDuplicates] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -83,17 +96,20 @@ export default function ImportPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const duplicateRowIndexes = leftOutRowIndexes(plans);
   const duplicateCount = duplicateRowIndexes.size;
+  const includedLeftOut = [...duplicateRowIndexes].filter((i) => includedDuplicates.has(i));
   // "Looks already imported" only when every row that would otherwise be added is a duplicate.
   const allRowsDuplicate =
     !!preview && preview.drafts.length > 0 && duplicateCount === preview.drafts.length;
+  const topUpCount = [...plans].filter(
+    ([rowIndex, plan]) => plan.kind === "topUp" && !includedDuplicates.has(rowIndex),
+  ).length;
   const locationNames = new Map([
     ...(locations ?? []).map((l) => [l.id, l.name] as const),
     ...(preview?.newLocations ?? []).map((l) => [l.id, l.name] as const),
   ]);
-  const rowsToImport = preview
-    ? preview.rows.filter((row) => shouldImportRow(row, duplicateRowIndexes, includedDuplicates))
-    : [];
+  const rowsToImport = preview ? draftsToImport(preview.rows, plans, includedDuplicates) : [];
   const willImportCount = rowsToImport.length;
   const locationsToCreate = newLocationsUsedBy(rowsToImport, preview?.newLocations ?? []);
 
@@ -157,18 +173,38 @@ export default function ImportPage() {
     return { wines, lots, locations: locations?.map((l) => ({ id: l.id, name: l.name })) ?? [] };
   }
 
+  /**
+   * The default location rows with none of their own will go to on import: the chosen one, or,
+   * for a typed new name, the existing location with that name, else a new one.
+   */
+  function defaultLocationForImport(): string | null {
+    if (locationMode === "existing") return existingLocationId || null;
+    const name = newLocationName.trim();
+    if (!name) return null;
+    const existing = locations?.find((l) => normalizeName(l.name) === normalizeName(name));
+    return existing?.id ?? NEW_DEFAULT_LOCATION;
+  }
+
   async function buildPreview(defaultLocationId: string | null) {
     if (!parsed) return;
-    const built = buildImportRows(parsed.rows, {
+    const options = {
       source,
       mapping,
-      defaultLocationId,
       defaultCurrency: currency.trim().toUpperCase() || null,
       locations: locations?.map((l) => ({ id: l.id, name: l.name })),
-    });
+    };
+    const built = buildImportRows(parsed.rows, { ...options, defaultLocationId });
+    // Compare with the cellar where the bottles will really go, so a new default location
+    // (which has no bottles yet) never matches bottles already in the cellar.
+    const planDefault = defaultLocationForImport();
+    const planned =
+      planDefault === defaultLocationId
+        ? built
+        : buildImportRows(parsed.rows, { ...options, defaultLocationId: planDefault });
     const cellar = await loadExistingCellar();
     setPreview(built);
-    setDuplicateRowIndexes(findDuplicateRowIndexes(built.rows, cellar));
+    // A CellarTracker export lists the whole cellar, so its counts can be compared with Vintry's.
+    setPlans(planImportRows(planned.rows, cellar, { compareCounts: source === "cellartracker" }));
     setIncludedDuplicates(new Set());
     setStep("preview");
   }
@@ -187,7 +223,7 @@ export default function ImportPage() {
   }
 
   function includeAllDuplicates() {
-    setIncludedDuplicates(new Set(duplicateRowIndexes));
+    setIncludedDuplicates((current) => new Set([...current, ...duplicateRowIndexes]));
   }
 
   async function handleImport() {
@@ -220,16 +256,14 @@ export default function ImportPage() {
         setImportError("Nothing to import: every row is missing a producer.");
         return;
       }
-      const keptRows = finalPreview.rows.filter((row) =>
-        shouldImportRow(row, duplicateRowIndexes, includedDuplicates),
-      );
-      if (keptRows.length === 0) {
+      const kept = draftsToImport(finalPreview.rows, plans, includedDuplicates);
+      if (kept.length === 0) {
         setImportError("Nothing to import: every row already looks like it's in your cellar.");
         return;
       }
       const result = await importRows({
-        rows: keptRows.map((row) => row.draft!),
-        newLocations: newLocationsUsedBy(keptRows, finalPreview.newLocations),
+        rows: kept.map((k) => k.draft),
+        newLocations: newLocationsUsedBy(kept, finalPreview.newLocations),
       });
       const leftOut = [...duplicateRowIndexes].filter((i) => !includedDuplicates.has(i)).length;
       setSummary(result.summary);
@@ -261,7 +295,7 @@ export default function ImportPage() {
     setExistingLocationId("");
     setNewLocationName("");
     setPreview(null);
-    setDuplicateRowIndexes(new Set());
+    setPlans(new Map());
     setIncludedDuplicates(new Set());
     setImportError(null);
     setSummary(null);
@@ -400,13 +434,20 @@ export default function ImportPage() {
                 <button
                   type="button"
                   onClick={includeAllDuplicates}
-                  disabled={includedDuplicates.size === duplicateCount}
+                  disabled={includedLeftOut.length === duplicateCount}
                   className="font-medium text-primary underline underline-offset-2 disabled:cursor-not-allowed disabled:text-ink-subtle disabled:no-underline"
                 >
                   Include them anyway
                 </button>
               </p>
             </div>
+          )}
+          {topUpCount > 0 && (
+            <p className="rounded-xl border border-border bg-surface-muted/60 p-4 text-sm text-ink">
+              {topUpCount === 1
+                ? "1 row has more bottles than your cellar. Only the new ones are added."
+                : `${topUpCount} rows have more bottles than your cellar. Only the new ones are added.`}
+            </p>
           )}
           {locationsToCreate.length > 0 && (
             <div className="space-y-1 rounded-xl border border-border bg-surface-muted/60 p-4 text-sm text-ink">
@@ -438,7 +479,10 @@ export default function ImportPage() {
               </thead>
               <tbody>
                 {preview.rows.slice(0, 20).map((row) => {
+                  const plan = plans.get(row.rowIndex);
                   const isDuplicate = duplicateRowIndexes.has(row.rowIndex);
+                  const isTopUp = plan?.kind === "topUp";
+                  const planLabel = rowPlanLabel(plan);
                   return (
                     <tr
                       key={row.rowIndex}
@@ -453,9 +497,9 @@ export default function ImportPage() {
                       <td className="px-3 py-2 tabular-nums text-ink-subtle">{row.rowIndex + 1}</td>
                       <td className="px-3 py-2">
                         {row.draft ? describeWineForRow(row.draft) : "(skipped)"}
-                        {isDuplicate && (
-                          <Badge tone="warning" className="ml-2">
-                            Already in your cellar
+                        {planLabel && (
+                          <Badge tone={isTopUp ? "info" : "warning"} className="ml-2">
+                            {planLabel}
                           </Badge>
                         )}
                       </td>
@@ -477,13 +521,17 @@ export default function ImportPage() {
                         ))}
                       </td>
                       <td className="px-3 py-2">
-                        {isDuplicate && (
+                        {(isDuplicate || isTopUp) && (
                           <input
                             type="checkbox"
                             checked={includedDuplicates.has(row.rowIndex)}
                             onChange={(e) => toggleIncluded(row.rowIndex, e.target.checked)}
                             className="size-4 accent-primary"
-                            aria-label={`Include row ${row.rowIndex + 1} anyway`}
+                            aria-label={
+                              isTopUp
+                                ? `Import all of row ${row.rowIndex + 1} anyway`
+                                : `Include row ${row.rowIndex + 1} anyway`
+                            }
                           />
                         )}
                       </td>

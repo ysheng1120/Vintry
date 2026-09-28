@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/db";
 import { makeWine, resetDatabase } from "../db/testing";
-import { findMatchingWine, normalizeName, wineKey } from "./match";
+import { buildWineMatcher, findMatchingWine, normalizeName, wineKey } from "./match";
 
 describe("normalizeName", () => {
   it("lowercases, strips accents and punctuation, and collapses spaces", () => {
@@ -51,5 +51,34 @@ describe("findMatchingWine", () => {
     expect(
       await findMatchingWine({ producer: "Ridge", name: "Monte Bello", vintage: 2019 }),
     ).toBeUndefined();
+  });
+});
+
+describe("buildWineMatcher", () => {
+  const ridge = { producer: "Ridge", name: "Monte Bello", vintage: 2019 };
+
+  it("matches by CellarTracker id first, then by name", () => {
+    const renamed = makeWine({ name: "Monte Bello (estate)", cellarTrackerId: "100001" });
+    const byName = makeWine();
+    const matcher = buildWineMatcher([byName, renamed]);
+    expect(matcher.find({ ...ridge, cellarTrackerId: "100001" })?.id).toBe(renamed.id);
+    expect(matcher.find({ ...ridge, cellarTrackerId: "555" })?.id).toBe(byName.id);
+    expect(matcher.find(ridge)?.id).toBe(byName.id);
+  });
+
+  it("never matches a deleted or sample wine by id", () => {
+    const matcher = buildWineMatcher([
+      makeWine({ name: "Old", cellarTrackerId: "1", deletedAt: "2026-01-01" }),
+      makeWine({ name: "Sample", cellarTrackerId: "2", isSample: true }),
+    ]);
+    expect(matcher.find({ ...ridge, cellarTrackerId: "1" })).toBeUndefined();
+    expect(matcher.find({ ...ridge, cellarTrackerId: "2" })).toBeUndefined();
+  });
+
+  it("matches a wine added later", () => {
+    const matcher = buildWineMatcher([]);
+    const wine = makeWine({ cellarTrackerId: "9" });
+    matcher.add(wine);
+    expect(matcher.find({ producer: "x", vintage: null, cellarTrackerId: "9" })?.id).toBe(wine.id);
   });
 });

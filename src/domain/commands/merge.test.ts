@@ -121,6 +121,21 @@ describe("mergeWines", () => {
     expect((await db.wines.get(keep.id))?.critics).toEqual(critics);
   });
 
+  it("keeps the duplicate's CellarTracker id when the kept wine has none", async () => {
+    const { keep, merge } = await seedDuplicates();
+    await db.wines.update(merge.id, { cellarTrackerId: "100001" });
+    await mergeWines({ keepId: keep.id, mergeId: merge.id });
+    expect((await db.wines.get(keep.id))?.cellarTrackerId).toBe("100001");
+  });
+
+  it("never replaces the kept wine's own CellarTracker id", async () => {
+    const { keep, merge } = await seedDuplicates();
+    await db.wines.update(keep.id, { cellarTrackerId: "7" });
+    await db.wines.update(merge.id, { cellarTrackerId: "8" });
+    await mergeWines({ keepId: keep.id, mergeId: merge.id });
+    expect((await db.wines.get(keep.id))?.cellarTrackerId).toBe("7");
+  });
+
   it("keeps the duplicate's suggested prices when the kept wine has none", async () => {
     const { keep, merge } = await seedDuplicates();
     const prices = {

@@ -1,5 +1,5 @@
 import type { ImportField } from "../../ai/features/mapCsv";
-import type { WineDraft } from "../../domain/commands/schemas";
+import type { ImportDraft } from "../../domain/commands/schemas";
 import { normalizeName } from "../../domain/match";
 import { parseLocaleNumber } from "../../lib/csv";
 import { toIsoDate } from "../../lib/format";
@@ -7,6 +7,7 @@ import { newId } from "../../lib/id";
 import {
   CELLARTRACKER_STYLE_HEADERS,
   cellarTrackerPending,
+  cellarTrackerWineId,
   cellarTrackerStyleText,
   normalizeColour,
   normalizeVintage,
@@ -33,7 +34,7 @@ export interface RowIssue {
 export interface ImportRow {
   rowIndex: number;
   /** null when the row is skipped; see `issues` for why. */
-  draft: WineDraft | null;
+  draft: ImportDraft | null;
   issues: RowIssue[];
 }
 
@@ -41,7 +42,7 @@ export interface ImportPreview {
   /** One entry per CSV data row, in file order. */
   rows: ImportRow[];
   /** Ready for `importRows({ rows: drafts, newLocations })`. */
-  drafts: WineDraft[];
+  drafts: ImportDraft[];
   /**
    * Locations the file names that Vintry does not have yet, in file order. Lots point at them by
    * `id`; `importRows` creates them with the bottles.
@@ -125,7 +126,7 @@ export function buildImportRows(
   };
 
   const result: ImportRow[] = [];
-  const drafts: WineDraft[] = [];
+  const drafts: ImportDraft[] = [];
   let bottleCount = 0;
 
   rows.forEach((row, rowIndex) => {
@@ -290,7 +291,7 @@ export function buildImportRows(
         warn("purchaseDate", `Date "${purchaseDateRaw}" isn't recognised; left blank`);
     }
 
-    const draft: WineDraft = {
+    const draft: ImportDraft = {
       producer,
       name,
       vintage,
@@ -306,6 +307,9 @@ export function buildImportRows(
       notes,
       lots: [{ quantity, locationId, bin, purchaseDate, pricePerBottle, currency, store }],
     };
+    // CellarTracker's own wine id, so the next export of this wine matches it even if renamed.
+    const cellarTrackerId = options.source === "cellartracker" ? cellarTrackerWineId(row) : null;
+    if (cellarTrackerId) draft.cellarTrackerId = cellarTrackerId;
 
     drafts.push(draft);
     bottleCount += quantity;

@@ -150,6 +150,54 @@ describe("importRows", () => {
     expect(result.summary).toBe("Imported 2 wines (8 bottles)");
   });
 
+  describe("CellarTracker's wine id", () => {
+    it("is kept on a wine a row creates", async () => {
+      await importRows({ rows: [{ ...monteBello, cellarTrackerId: "100001", lots: [] }] });
+      expect((await db.wines.toArray())[0]?.cellarTrackerId).toBe("100001");
+    });
+
+    it("is recorded on a matched wine that had none, and undo takes it off again", async () => {
+      await db.wines.add(makeWine({ id: "w1" }));
+      const result = await importRows({
+        rows: [{ ...monteBello, cellarTrackerId: "100001", lots: [{ quantity: 1 }] }],
+      });
+      expect(await db.wines.count()).toBe(1);
+      expect((await db.wines.get("w1"))?.cellarTrackerId).toBe("100001");
+      await undoBatch(result.batchId!);
+      expect((await db.wines.get("w1"))?.cellarTrackerId).toBeUndefined();
+      expect(await db.lots.count()).toBe(0);
+    });
+
+    it("never replaces a wine's own id", async () => {
+      await db.wines.add(makeWine({ id: "w1", cellarTrackerId: "100001" }));
+      await importRows({
+        rows: [{ ...monteBello, cellarTrackerId: "999", lots: [{ quantity: 1 }] }],
+      });
+      expect((await db.wines.get("w1"))?.cellarTrackerId).toBe("100001");
+      expect(await db.wines.count()).toBe(1);
+    });
+
+    it("matches first, so a wine renamed in Vintry still gets its bottles", async () => {
+      await db.wines.add(
+        makeWine({ id: "w1", name: "Monte Bello (estate)", cellarTrackerId: "100001" }),
+      );
+      // The same name and vintage as another wine does not win over the id.
+      await db.wines.add(makeWine({ id: "w2", name: "Monte Bello" }));
+      await importRows({
+        rows: [{ ...monteBello, cellarTrackerId: "100001", lots: [{ quantity: 2 }] }],
+      });
+      expect(await db.wines.count()).toBe(2);
+      const lots = await db.lots.toArray();
+      expect(lots.map((l) => [l.wineId, l.quantity])).toEqual([["w1", 2]]);
+    });
+
+    it("round-trips through a backup", async () => {
+      await importRows({ rows: [{ ...monteBello, cellarTrackerId: "100001", lots: [] }] });
+      const parsed = parseBackup(JSON.stringify(await exportBackup()));
+      expect(parsed.ok && parsed.backup.data.wines[0]?.cellarTrackerId).toBe("100001");
+    });
+  });
+
   it("imports 300 rows quickly", async () => {
     const rows = Array.from({ length: 300 }, (_, i) => ({
       producer: `Producer ${i}`,

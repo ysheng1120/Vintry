@@ -57,6 +57,16 @@ export const WineDraftSchema = WineFieldsSchema.extend({
 export type WineDraft = z.input<typeof WineDraftSchema>;
 
 /**
+ * A draft from a CSV import row. `cellarTrackerId` is CellarTracker's own wine id (its `iWine`
+ * column): the row matches the wine that carries it first, and a wine the row creates or joins
+ * keeps it. Import only: not an AI tool field, and not something a wine edit changes.
+ */
+export const ImportDraftSchema = WineDraftSchema.extend({
+  cellarTrackerId: z.string().trim().min(1).nullable().optional(),
+});
+export type ImportDraft = z.input<typeof ImportDraftSchema>;
+
+/**
  * The collector's own market value for a wine. Only `updateWine` takes it, and only from the
  * collector: the command refuses it from AI, import, or any other source.
  */
