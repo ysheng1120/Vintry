@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    date: "2026-10-01",
+    headline: "Check price, and one card for everything Claude knows about a wine.",
+    changes: [
+      "Check price: with an AI key, click Check price on a wine to see its current shop prices, as a range for each currency, with a link to each shop. Prices are never converted, and shop prices are often above auction or collector prices.",
+      "Use this price opens a sheet with the middle price filled in. Your value changes only when you save it.",
+      "About this wine, What critics say, and Shop prices now sit together in one card on the wine page.",
+    ],
+  },
+  {
     version: "1.3.0",
     date: "2026-09-27",
     headline: "Automatic backups, What critics say, and a guard against double imports.",

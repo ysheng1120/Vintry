@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockAnthropic, type ScriptedReply } from "./anthropicMock";
+import { citedText, mockAnthropic, webSearch, type ScriptedReply } from "./anthropicMock";
 import {
   addByHand,
   cellarRows,
@@ -186,5 +186,100 @@ test.describe("About this wine, with a mocked Anthropic API", () => {
       .click();
     await expect(page.getByText(PROFILE.summary)).toBeVisible();
     await expect(page.getByRole("button", { name: "Rewrite profile" })).toBeVisible();
+  });
+});
+
+test.describe("Check price, with a mocked Anthropic API", () => {
+  // A service worker could answer requests before page.route sees them; the mock must see all.
+  test.use({ serviceWorkers: "block" });
+
+  const TEST_KEY = "sk-ant-test-e2e-collector-0000";
+  const PAGE = "https://www.bbr.com/products/chateau-margaux-2015";
+  const QUOTE = "£225.00 per bottle";
+  // Step 2 answer: one bottle price, for this vintage and size, from the one numbered source.
+  const SUMMARY = {
+    prices: [
+      {
+        written: "£225.00",
+        amount: 225,
+        currency: "£",
+        unit: "bottle",
+        sizeMl: 750,
+        vintage: 2015,
+        basis: "duty-paid retail",
+        availability: "for sale",
+        merchant: "Berry Bros. & Rudd",
+        sourceId: 1,
+      },
+    ],
+  };
+
+  test("checks a price, uses it, and shows the saved value on the wine page", async ({ page }) => {
+    const label = await addByHand(page, {
+      producer: "Château Margaux",
+      name: "Grand Vin",
+      vintage: 2015,
+      bottles: 1,
+    });
+    await dismissToast(page, `Added 1 bottle of ${label}`);
+
+    const seen = await mockAnthropic(page, (request): ScriptedReply => {
+      if (request.stream) throw new Error("This journey makes no streaming request.");
+      const last = request.messages.at(-1);
+      const text = typeof last?.content === "string" ? last.content : "";
+      if (text.includes("Reply with the single word OK")) {
+        return { content: [{ type: "text", text: "OK" }] };
+      }
+      if (request.tools?.some((tool) => tool.name === "web_search")) {
+        // Step 1: the research, with one web search and a cited price.
+        return {
+          content: [
+            ...webSearch("srvtoolu_e2e_1", "Château Margaux Grand Vin 2015 price", [
+              { url: PAGE, title: "Château Margaux 2015 | Berry Bros. & Rudd" },
+            ]),
+            citedText("Berry Bros. & Rudd lists the 2015 at £225.00 per bottle.", [
+              { url: PAGE, title: "Château Margaux 2015 | Berry Bros. & Rudd", citedText: QUOTE },
+            ]),
+          ],
+        };
+      }
+      // Step 2: the labelled prices.
+      return { content: [{ type: "text", text: JSON.stringify(SUMMARY) }] };
+    });
+
+    await openSection(page, "More");
+    await page.getByRole("link", { name: /^Settings/ }).click();
+    await expect(pageHeading(page, "Settings")).toBeVisible();
+    await page.getByLabel("Claude API key").fill(TEST_KEY);
+    await page.getByRole("button", { name: "Save key" }).click();
+    await expect(page.getByText("Your key works.")).toBeVisible();
+
+    await openSection(page, "Cellar");
+    await cellarRows(page).filter({ hasText: "Château Margaux" }).click();
+    await expect(pageHeading(page, label)).toBeVisible();
+    await expect(page.getByText(/^Your value:/)).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Check price" }).click();
+    await expect(page.getByText(/GBP £225/)).toBeVisible();
+    const link = page.getByRole("link", { name: /Berry Bros\. & Rudd/ });
+    await expect(link).toHaveAttribute("href", PAGE);
+    await expect(
+      page.getByText(/Shop prices are often above auction or collector prices/),
+    ).toBeVisible();
+    await dismissToast(page, `Found prices for ${label}`);
+
+    // The search sent only the wine's identity, to the fixed list of shops.
+    const research = seen.find((request) => request.tools?.some((t) => t.name === "web_search"));
+    expect(JSON.stringify(research?.tools)).toContain("bbr.com");
+
+    // Nothing is the wine's value until the collector saves the sheet.
+    await page.getByRole("button", { name: /^Use this price/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Set your value" });
+    await expect(sheet).toBeVisible();
+    await expect(page.getByText(/^Your value:/)).toHaveCount(0);
+    await sheet.getByRole("button", { name: "Save value" }).click();
+    await expect(sheet).toHaveCount(0);
+
+    await expect(page.getByText(/^Your value:/)).toContainText("£225.00");
   });
 });
