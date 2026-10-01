@@ -294,6 +294,19 @@ describe("PriceSection", () => {
     ).toBe(false);
   });
 
+  it("names a range's shop even when that page's case price comes first", async () => {
+    const caseFirst = [SAVED.listings[4]!, ...SAVED.listings.slice(0, 4)];
+    const wine = await addWine({ priceCheck: { ...SAVED, listings: caseFirst } });
+    renderSection(wine);
+
+    const gbp = await screen.findByText("GBP £200 to £240, middle £225 (3 prices)");
+    const from = within(gbp.closest("li")!).getByText(/^From/);
+    expect(within(from).getByRole("link", { name: /Farr Vintners/ })).toHaveAttribute(
+      "href",
+      FARR,
+    );
+  });
+
   it("marks a result for another vintage out of date and hides Use this price (AE3)", async () => {
     const wine = await addWine({ vintage: 2018, priceCheck: SAVED });
     renderSection(wine);

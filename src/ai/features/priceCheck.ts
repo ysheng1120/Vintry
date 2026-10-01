@@ -94,8 +94,6 @@ function wineData(wine: Wine) {
   };
 }
 
-/** JSON that cannot close the fence: "<" is escaped, which JSON allows. */
-
 /**
  * Step 1: Claude searches the price sites for this wine and answers with cited text, at most
  * five searches. Throws AiError.

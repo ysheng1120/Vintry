@@ -203,11 +203,15 @@ export default function PriceSection({ wine }: PriceSectionProps) {
               {prices.ranges.length > 0 && (
                 <ul className="flex flex-col gap-3">
                   {prices.ranges.map((range) => {
-                    const shops = prices.listings.filter(
-                      (listing, index, all) =>
-                        listing.inRange &&
-                        listing.currency === range.currency &&
-                        all.findIndex((other) => other.source.url === listing.source.url) === index,
+                    // Remove repeated pages only among this range's own listings, so a page whose
+                    // case price or other-currency price comes first still shows as a shop here.
+                    const inRange = prices.listings.filter(
+                      (listing) => listing.inRange && listing.currency === range.currency,
+                    );
+                    const shops = inRange.filter(
+                      (listing, index) =>
+                        inRange.findIndex((other) => other.source.url === listing.source.url) ===
+                        index,
                     );
                     const reason = withheldReason(range);
                     const text = rangeText(range);

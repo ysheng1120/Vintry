@@ -77,8 +77,6 @@ function wineData(wine: Wine) {
   };
 }
 
-/** JSON that cannot close the fence: "<" is escaped, which JSON allows. */
-
 /**
  * Step 1: Claude searches reputable wine sites for this wine and answers with cited text.
  * A turn the server pauses (`pause_turn`) is resumed by sending its content back as it is,
