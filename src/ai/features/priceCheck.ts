@@ -18,8 +18,11 @@ import {
   resolveCurrency,
 } from "./priceMatch";
 import {
+  collapseWhitespace,
   numberSources,
+  passagesWithSourceIds,
   runWebResearch,
+  safeJson,
   throwIfAborted,
   type NumberedSource,
   type WebResearch,
@@ -92,7 +95,6 @@ function wineData(wine: Wine) {
 }
 
 /** JSON that cannot close the fence: "<" is escaped, which JSON allows. */
-const safeJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 
 /**
  * Step 1: Claude searches the price sites for this wine and answers with cited text, at most
@@ -170,8 +172,6 @@ export type PriceContent = Pick<WinePriceCheck, "ranges" | "listings" | "found">
 
 const NOTHING_FOUND: PriceContent = { ranges: [], listings: [], found: false };
 
-const collapse = (text: string) => text.replace(/\s+/g, " ").trim();
-
 /** A four-digit year 1800 to 2099 that is not part of a price or a longer number. */
 const YEAR = /(?<![\d$£€¥.,'])(?:1[89]|20)\d{2}(?!\d)(?![.,]\d)/g;
 
@@ -214,7 +214,7 @@ export function verifyPrices(
     const source = byId.get(entry.sourceId);
     if (!source) continue;
     const ctx = { siteDollar: siteDollarFor(source.url) };
-    const price = { amount: entry.amount, currency: collapse(entry.currency) };
+    const price = { amount: entry.amount, currency: collapseWhitespace(entry.currency) };
     const holding = source.quotes.filter((quote) => priceAppearsIn(price, quote, ctx));
     if (holding.length === 0) continue;
 
@@ -242,11 +242,11 @@ export function verifyPrices(
       holding.every((quote) => showsNoOtherYear(quote, wine.vintage)) &&
       (sizeMl === wine.bottleSize || (sizeMl === null && wine.bottleSize === 750));
 
-    const written = collapse(entry.written);
+    const written = collapseWhitespace(entry.written);
     const writtenPrices = findPrices(written);
     const usesQuoteWriting =
       written !== "" &&
-      holding.some((quote) => collapse(quote).includes(written)) &&
+      holding.some((quote) => collapseWhitespace(quote).includes(written)) &&
       writtenPrices.length === 1 &&
       writtenPrices[0]!.amount === entry.amount;
 
@@ -254,7 +254,7 @@ export function verifyPrices(
       amount: usesQuoteWriting ? written : formatAmount(entry.amount, currency),
       value: entry.amount,
       currency,
-      merchant: collapse(entry.merchant) || source.title,
+      merchant: collapseWhitespace(entry.merchant) || source.title,
       unit: entry.unit,
       sizeMl,
       vintage,
@@ -281,15 +281,7 @@ async function summarize(
   sources: NumberedSource[],
   signal: AbortSignal | undefined,
 ): Promise<{ content: PriceContent; model: string }> {
-  const ids = new Map(sources.map((source) => [source.url, source.id]));
-  const passages = research.passages
-    .filter((passage) => passage.text.trim())
-    .map((passage) => ({
-      text: passage.text,
-      sourceIds: [
-        ...new Set(passage.citations.flatMap((c) => (ids.has(c.url) ? [ids.get(c.url)!] : []))),
-      ],
-    }));
+  const passages = passagesWithSourceIds(research, sources);
   const { data, model } = await runStructuredWithModel({
     feature: "price",
     schema: PriceSummarySchema,

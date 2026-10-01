@@ -189,3 +189,25 @@ export function numberSources(
   }
   return [...byUrl.values()];
 }
+
+/** JSON for a prompt fence: "<" is escaped (valid JSON), so the data can never close the fence. */
+export const safeJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
+
+/** Runs of whitespace as one space, trimmed: how quotes and labels are compared. */
+export const collapseWhitespace = (text: string) => text.replace(/\s+/g, " ").trim();
+
+/** The research passages with the ids of the numbered sources each one cites (empty passages dropped). */
+export function passagesWithSourceIds(
+  research: Pick<WebResearch, "passages">,
+  sources: NumberedSource[],
+): { text: string; sourceIds: number[] }[] {
+  const ids = new Map(sources.map((source) => [source.url, source.id]));
+  return research.passages
+    .filter((passage) => passage.text.trim())
+    .map((passage) => ({
+      text: passage.text,
+      sourceIds: [
+        ...new Set(passage.citations.flatMap((c) => (ids.has(c.url) ? [ids.get(c.url)!] : []))),
+      ],
+    }));
+}

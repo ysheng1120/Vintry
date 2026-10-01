@@ -8,7 +8,7 @@ import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import type { Wine } from "../../domain/types";
-import ProfileSection from "./AboutWineCard";
+import ProfileSection from "./ProfileSection";
 
 let ai: FakeAi;
 

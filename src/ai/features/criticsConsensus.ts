@@ -4,8 +4,11 @@ import { setWineCritics, type CommandResult } from "../../domain/commands";
 import type { CriticSource, Wine, WineCritics } from "../../domain/types";
 import { runStructuredWithModel } from "../structured";
 import {
+  collapseWhitespace,
   numberSources,
+  passagesWithSourceIds,
   runWebResearch,
+  safeJson,
   throwIfAborted,
   type NumberedSource,
   type WebResearch,
@@ -75,7 +78,6 @@ function wineData(wine: Wine) {
 }
 
 /** JSON that cannot close the fence: "<" is escaped, which JSON allows. */
-const safeJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
 
 /**
  * Step 1: Claude searches reputable wine sites for this wine and answers with cited text.
@@ -148,8 +150,6 @@ export type CriticsContent = Omit<WineCritics, "generatedAt" | "model">;
 
 const NOTHING_FOUND: CriticsContent = { consensus: "", points: [], scores: [], found: false };
 
-const collapse = (text: string) => text.replace(/\s+/g, " ").trim();
-
 /** "94", "17.5", "95+", "92-94". */
 const SCORE_FORMAT = /^\d{1,3}(?:\.\d{1,2})?(?: ?[-–] ?\d{1,3}(?:\.\d{1,2})?)?\+?$/;
 const SCALES = new Set(["100", "20"]);
@@ -159,10 +159,12 @@ const SCALES = new Set(["100", "20"]);
  * but not "1994" or "94.5".
  */
 export function scoreAppearsIn(score: string, text: string): boolean {
-  const wanted = collapse(score);
+  const wanted = collapseWhitespace(score);
   if (!SCORE_FORMAT.test(wanted)) return false;
   const escaped = wanted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<!\\d)(?<!\\d\\.)${escaped}(?!\\d)(?!\\.\\d)`).test(collapse(text));
+  return new RegExp(`(?<!\\d)(?<!\\d\\.)${escaped}(?!\\d)(?!\\.\\d)`).test(
+    collapseWhitespace(text),
+  );
 }
 
 /** The score's numbers fit its scale (a 17.5 on the 20-point scale, never a 94). */
@@ -185,7 +187,7 @@ export function verifyCritics(summary: CriticsSummary, sources: NumberedSource[]
 
   const points: CriticsContent["points"] = [];
   for (const point of summary.points) {
-    const text = collapse(point.text);
+    const text = collapseWhitespace(point.text);
     const ids = [...new Set(point.sourceIds)].filter((id) => byId.has(id));
     if (!text || ids.length === 0) continue;
     points.push({ text, sources: ids.map((id) => link(byId.get(id)!)) });
@@ -194,10 +196,10 @@ export function verifyCritics(summary: CriticsSummary, sources: NumberedSource[]
   const scores: CriticsContent["scores"] = [];
   for (const entry of summary.scores) {
     const source = byId.get(entry.sourceId);
-    const score = collapse(entry.score);
-    const scale = collapse(entry.scale);
-    const critic = collapse(entry.critic);
-    const publication = collapse(entry.publication);
+    const score = collapseWhitespace(entry.score);
+    const scale = collapseWhitespace(entry.scale);
+    const critic = collapseWhitespace(entry.critic);
+    const publication = collapseWhitespace(entry.publication);
     if (!source || (!critic && !publication) || !fitsScale(score, scale)) continue;
     if (!source.quotes.some((quote) => scoreAppearsIn(score, quote))) continue;
     scores.push({ critic, publication, score, scale, source: link(source) });
@@ -214,15 +216,7 @@ async function summarize(
   sources: NumberedSource[],
   signal: AbortSignal | undefined,
 ): Promise<{ content: CriticsContent; model: string }> {
-  const ids = new Map(sources.map((source) => [source.url, source.id]));
-  const passages = research.passages
-    .filter((passage) => passage.text.trim())
-    .map((passage) => ({
-      text: passage.text,
-      sourceIds: [
-        ...new Set(passage.citations.flatMap((c) => (ids.has(c.url) ? [ids.get(c.url)!] : []))),
-      ],
-    }));
+  const passages = passagesWithSourceIds(research, sources);
   const { data, model } = await runStructuredWithModel({
     feature: "critics",
     schema: CriticsSummarySchema,

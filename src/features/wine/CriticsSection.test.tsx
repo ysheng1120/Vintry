@@ -16,7 +16,7 @@ import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import type { Wine, WineCritics } from "../../domain/types";
-import CriticsSection from "./CriticsCard";
+import CriticsSection from "./CriticsSection";
 
 let ai: FakeAi;
 

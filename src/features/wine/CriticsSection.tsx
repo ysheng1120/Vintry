@@ -1,57 +1,25 @@
-import { ExternalLink, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  generateWineCritics,
-  isHttpUrl,
-  NO_REVIEWS_MESSAGE,
-} from "../../ai/features/criticsConsensus";
+import { generateWineCritics, NO_REVIEWS_MESSAGE } from "../../ai/features/criticsConsensus";
+import { isHttpUrl } from "../../ai/features/webResearch";
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import { Button } from "../../components/ui/Button";
 import { setWineCritics } from "../../domain/commands";
-import type { CriticSource, Wine } from "../../domain/types";
+import type { Wine } from "../../domain/types";
 import { formatDate } from "../../lib/format";
+import { SourceLink } from "./SourceLink";
 
 export interface CriticsSectionProps {
   wine: Wine;
 }
 
-const LINK_CLASS =
-  "inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline";
-
-/** A link to a source page, in a new tab. Anything but an http(s) URL renders nothing. */
-function SourceLink({
-  source,
-  label,
-  name,
-}: {
-  source: CriticSource;
-  label: string;
-  /** Accessible name, e.g. "Source 1: Decanter review". */
-  name: string;
-}) {
-  if (!isHttpUrl(source.url)) return null;
-  return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={source.title}
-      aria-label={`${name} (opens in a new tab)`}
-      className={LINK_CLASS}
-    >
-      {label}
-      <ExternalLink aria-hidden="true" className="size-3" />
-    </a>
-  );
-}
-
 /**
- * The "What critics say" section of the About this wine card: on request, Claude searches reputable wine sites for this wine and the
- * app shows a short, sourced summary. Scores are shown only when the text cited from their
- * source shows them (checked in criticsConsensus.ts). Finding, refreshing, and removing it are
- * undoable commands (KTD4); only the wine's identity is sent. The card shows the AI status note
- * once; buttons carry it as a title.
+ * The "What critics say" section of the About this wine card: on request, Claude searches
+ * reputable wine sites for this wine and the app shows a short, sourced summary. Scores are shown
+ * only when the text cited from their source shows them (checked in criticsConsensus.ts).
+ * Finding, refreshing, and removing it are undoable commands (KTD4); only the wine's identity is
+ * sent. The card shows the AI status note once; buttons carry it as a title.
  */
 export default function CriticsSection({ wine }: CriticsSectionProps) {
   const status = useAiStatus();

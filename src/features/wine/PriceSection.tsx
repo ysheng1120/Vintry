@@ -1,6 +1,5 @@
-import { AlertTriangle, ExternalLink, Tag } from "lucide-react";
+import { AlertTriangle, Tag } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { isHttpUrl } from "../../ai/features/criticsConsensus";
 import { generateWinePriceCheck, NO_PRICES_MESSAGE } from "../../ai/features/priceCheck";
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { useCommandFeedback } from "../../app/commandFeedback";
@@ -11,6 +10,7 @@ import { formatMoney } from "../../domain/money";
 import type { Wine, WinePriceCheck } from "../../domain/types";
 import { formatDate } from "../../lib/format";
 import { SetValueSheet } from "./SetValueSheet";
+import { SourceLink } from "./SourceLink";
 
 export interface PriceSectionProps {
   wine: Wine;
@@ -18,9 +18,6 @@ export interface PriceSectionProps {
 
 type PriceRange = WinePriceCheck["ranges"][number];
 type PriceListing = WinePriceCheck["listings"][number];
-
-const LINK_CLASS =
-  "inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline";
 
 const isIso = (currency: string) => /^[A-Z]{3}$/.test(currency);
 
@@ -41,7 +38,7 @@ function moneyText(amount: number, currency: string): string {
 
 /** "GBP £200 to £240, middle £225 (3 prices)", or one amount when the range has one price. */
 function rangeText(range: PriceRange): string {
-  const code = isIso(range.currency) ? `${range.currency} ` : "";
+  const code = range.usable ? `${range.currency} ` : "";
   const money = (amount: number) => moneyText(amount, range.currency);
   if (range.count <= 1 || range.low === range.high) {
     return `${code}${money(range.middle)} (${range.count === 1 ? "1 price" : `${range.count} prices`})`;
@@ -89,19 +86,13 @@ function listingText(listing: PriceListing, vintage: number | null): string {
 
 /** The shop's name, linked to its page in a new tab; a non-http(s) source is plain text. */
 function ShopLink({ listing }: { listing: PriceListing }) {
-  if (!isHttpUrl(listing.source.url)) return <span>{listing.merchant}</span>;
   return (
-    <a
-      href={listing.source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={listing.source.title}
-      aria-label={`${listing.merchant} (opens in a new tab)`}
-      className={LINK_CLASS}
-    >
-      {listing.merchant}
-      <ExternalLink aria-hidden="true" className="size-3" />
-    </a>
+    <SourceLink
+      source={listing.source}
+      label={listing.merchant}
+      name={listing.merchant}
+      fallback={<span>{listing.merchant}</span>}
+    />
   );
 }
 

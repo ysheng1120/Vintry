@@ -1,8 +1,8 @@
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { Card } from "../../components/ui/Card";
 import type { Wine } from "../../domain/types";
-import ProfileSection from "./AboutWineCard";
-import CriticsSection from "./CriticsCard";
+import ProfileSection from "./ProfileSection";
+import CriticsSection from "./CriticsSection";
 import PriceSection from "./PriceSection";
 
 export interface WineGuideCardProps {
