@@ -8,12 +8,11 @@ import {
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { setWineCritics } from "../../domain/commands";
 import type { CriticSource, Wine } from "../../domain/types";
 import { formatDate } from "../../lib/format";
 
-export interface CriticsCardProps {
+export interface CriticsSectionProps {
   wine: Wine;
 }
 
@@ -48,12 +47,13 @@ function SourceLink({
 }
 
 /**
- * "What critics say": on request, Claude searches reputable wine sites for this wine and the
+ * The "What critics say" section of the About this wine card: on request, Claude searches reputable wine sites for this wine and the
  * app shows a short, sourced summary. Scores are shown only when the text cited from their
  * source shows them (checked in criticsConsensus.ts). Finding, refreshing, and removing it are
- * undoable commands (KTD4); only the wine's identity is sent.
+ * undoable commands (KTD4); only the wine's identity is sent. The card shows the AI status note
+ * once; buttons carry it as a title.
  */
-export default function CriticsCard({ wine }: CriticsCardProps) {
+export default function CriticsSection({ wine }: CriticsSectionProps) {
   const status = useAiStatus();
   const { done, failed } = useCommandFeedback();
   const [finding, setFinding] = useState(false);
@@ -111,14 +111,14 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
   }
 
   return (
-    <Card padding="lg">
-      <h2 className="mb-2 text-lg font-semibold">What critics say</h2>
+    <section>
+      <h3 className="mb-1 text-base font-semibold">What critics say</h3>
       {!critics ? (
         <>
           <p className="text-sm text-ink-muted">
             Searches reputable wine sites. Uses your AI key (a few web searches).
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
@@ -130,7 +130,6 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
             >
               {finding ? "Searching…" : "Find what critics say"}
             </Button>
-            {note && <span className="text-xs text-ink-muted">{note}</span>}
           </div>
         </>
       ) : (
@@ -142,7 +141,7 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
               {critics.consensus && <p className="text-ink-muted">{critics.consensus}</p>}
               {critics.scores.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-ink">Scores</h3>
+                  <h4 className="text-sm font-semibold text-ink">Scores</h4>
                   <ul className="mt-1 flex flex-col gap-1 text-sm text-ink-muted">
                     {critics.scores.map((score, index) => (
                       <li key={`${score.critic}-${score.publication}-${index}`}>
@@ -187,6 +186,7 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              aria-label="Refresh critics summary"
               variant="ghost"
               size="sm"
               loading={finding}
@@ -197,6 +197,7 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
               Refresh
             </Button>
             <Button
+              aria-label="Remove critics summary"
               variant="ghost"
               size="sm"
               loading={removing}
@@ -205,10 +206,9 @@ export default function CriticsCard({ wine }: CriticsCardProps) {
             >
               Remove
             </Button>
-            {note && <span className="text-xs text-ink-muted">{note}</span>}
           </div>
         </div>
       )}
-    </Card>
+    </section>
   );
 }

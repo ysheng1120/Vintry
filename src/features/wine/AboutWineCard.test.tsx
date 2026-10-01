@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { saveApiKey } from "../../ai/client";
@@ -8,7 +8,7 @@ import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import type { Wine } from "../../domain/types";
-import AboutWineCard from "./AboutWineCard";
+import ProfileSection from "./AboutWineCard";
 
 let ai: FakeAi;
 
@@ -32,7 +32,7 @@ function renderCard(wine: Wine) {
   const user = userEvent.setup();
   render(
     <ToastProvider>
-      <AboutWineCard wine={wine} />
+      <ProfileSection wine={wine} />
     </ToastProvider>,
   );
   return user;
@@ -45,12 +45,14 @@ const REPLY = {
   serving: "Serve at 16 to 18°C; decant for about an hour.",
 };
 
-describe("AboutWineCard", () => {
-  it("shows a disabled Write a profile button and Needs AI key when there is no key", async () => {
+describe("ProfileSection (About this wine)", () => {
+  it("shows a disabled Write a profile button titled Needs AI key when there is no key", async () => {
     const wine = await addWine();
     renderCard(wine);
-    expect(await screen.findByRole("button", { name: "Write a profile" })).toBeDisabled();
-    expect(screen.getByText("Needs AI key")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 3, name: "Profile" })).toBeVisible();
+    const button = await screen.findByRole("button", { name: "Write a profile" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Needs AI key");
   });
 
   it("writes a profile, saves it, and offers Undo", async () => {
@@ -76,11 +78,12 @@ describe("AboutWineCard", () => {
 
     expect(await screen.findByText(REPLY.summary)).toBeInTheDocument();
     expect(screen.getByText(REPLY.tasting)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 4, name: "Pairs well with" })).toBeVisible();
     for (const pairing of REPLY.pairings) expect(screen.getByText(pairing)).toBeInTheDocument();
     expect(screen.getByText(REPLY.serving)).toBeInTheDocument();
     expect(screen.getByText(/Written by AI on/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rewrite profile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove profile" })).toBeInTheDocument();
   });
 
   it("removes a saved profile and offers Undo", async () => {
@@ -90,11 +93,26 @@ describe("AboutWineCard", () => {
     });
     const user = renderCard(wine);
 
-    await user.click(await screen.findByRole("button", { name: "Remove" }));
+    await user.click(await screen.findByRole("button", { name: "Remove profile" }));
 
     const toasts = within(screen.getByRole("region", { name: "Notifications" }));
     expect(await toasts.findByText(/Removed the profile/)).toBeInTheDocument();
     expect((await db.wines.get(wine.id))?.profile).toBeNull();
+  });
+
+  it("sends one request even on a double click", async () => {
+    await saveApiKey("sk-ant-test");
+    const wine = await addWine();
+    ai.queueJson(REPLY);
+    const user = renderCard(wine);
+
+    const button = await screen.findByRole("button", { name: "Write a profile" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.dblClick(button);
+
+    const toasts = within(screen.getByRole("region", { name: "Notifications" }));
+    expect(await toasts.findByText(/Wrote a profile/)).toBeInTheDocument();
+    expect(ai.requests).toHaveLength(1);
   });
 
   it("keeps no profile and explains the error when the request fails", async () => {

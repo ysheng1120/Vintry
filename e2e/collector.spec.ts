@@ -165,9 +165,26 @@ test.describe("About this wine, with a mocked Anthropic API", () => {
     await cellarRows(page).filter({ hasText: "Domaine Ott" }).click();
     await expect(pageHeading(page, label)).toBeVisible();
 
+    // One card, one heading, three stacked sections (KTD5).
+    await expect(page.getByRole("heading", { level: 2, name: "About this wine" })).toBeVisible();
+    for (const section of ["Profile", "What critics say", "Shop prices"]) {
+      await expect(page.getByRole("heading", { level: 3, name: section })).toBeVisible();
+    }
+    await expect(page.getByRole("button", { name: "Find what critics say" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Check price" })).toBeEnabled();
+
     await page.getByRole("button", { name: "Write a profile" }).click();
     await expect(page.getByText(PROFILE.summary)).toBeVisible();
     await expect(page.getByText("Grilled fish")).toBeVisible();
     await expect(page.getByText(/Written by AI/)).toBeVisible();
+    await dismissToast(page, /Wrote a profile/);
+
+    await page.getByRole("button", { name: "Remove profile" }).click();
+    await expect(page.getByRole("button", { name: "Write a profile" })).toBeVisible();
+    await toast(page, /Removed the profile/)
+      .getByRole("button", { name: "Undo" })
+      .click();
+    await expect(page.getByText(PROFILE.summary)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rewrite profile" })).toBeVisible();
   });
 });

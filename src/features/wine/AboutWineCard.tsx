@@ -3,32 +3,35 @@ import { useEffect, useRef, useState } from "react";
 import { generateWineProfile } from "../../ai/features/wineProfile";
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
 import { setWineProfile } from "../../domain/commands";
 import type { Wine } from "../../domain/types";
 import { formatDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
 
-export interface AboutWineCardProps {
+export interface ProfileSectionProps {
   wine: Wine;
 }
 
 /**
- * "About this wine": a short AI-written profile (style, typical tasting notes, food pairings,
- * serving tips) from the wine's identity alone, shown on the wine page. Writing, rewriting and
- * removing it are all undoable commands (KTD4); nothing here reads this bottle's price, notes,
- * or location.
+ * The "Profile" section of the About this wine card: a short AI-written profile (style, typical
+ * tasting notes, food pairings, serving tips) from the wine's identity alone. Writing, rewriting
+ * and removing it are all undoable commands (KTD4); nothing here reads this bottle's price,
+ * notes, or location. The card shows the AI status note once; buttons carry it as a title.
  */
-export default function AboutWineCard({ wine }: AboutWineCardProps) {
+export default function ProfileSection({ wine }: ProfileSectionProps) {
   const status = useAiStatus();
   const { done, failed } = useCommandFeedback();
   const [writing, setWriting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
+  // Set synchronously, so a double click cannot start a second request before React re-renders.
+  const runningRef = useRef(false);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   const write = async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     const controller = new AbortController();
     controllerRef.current = controller;
     setWriting(true);
@@ -38,17 +41,21 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
     } catch (error) {
       if (!controller.signal.aborted) failed(error, "Couldn't write a profile");
     } finally {
+      runningRef.current = false;
       if (!controller.signal.aborted) setWriting(false);
     }
   };
 
   const remove = async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setRemoving(true);
     try {
       done(await setWineProfile({ wineId: wine.id, profile: null }));
     } catch (error) {
       failed(error, "Couldn't remove the profile");
     } finally {
+      runningRef.current = false;
       setRemoving(false);
     }
   };
@@ -59,15 +66,14 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
   const disabled = status.state !== "ready" || busy;
 
   return (
-    <Card padding="lg">
-      <h2 className="mb-2 text-lg font-semibold">About this wine</h2>
+    <section>
+      <h3 className="mb-1 text-base font-semibold">Profile</h3>
       {!profile ? (
         <>
           <p className="text-sm text-ink-muted">
-            Ask Claude for a short profile: its style, typical tasting notes, food pairings, and
-            serving tips.
+            Style, typical tasting notes, food pairings, and serving tips.
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
@@ -79,7 +85,6 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
             >
               {writing ? "Writing…" : "Write a profile"}
             </Button>
-            {note && <span className="text-xs text-ink-muted">{note}</span>}
           </div>
         </>
       ) : (
@@ -88,7 +93,7 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
           {profile.tasting && <p className="text-ink-muted">{profile.tasting}</p>}
           {profile.pairings.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-ink">Pairs well with</h3>
+              <h4 className="text-sm font-semibold text-ink">Pairs well with</h4>
               <ul className="mt-1 list-disc pl-5 text-sm text-ink-muted">
                 {profile.pairings.map((pairing) => (
                   <li key={pairing}>{pairing}</li>
@@ -102,6 +107,7 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
+              aria-label="Rewrite profile"
               variant="ghost"
               size="sm"
               loading={writing}
@@ -112,6 +118,7 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
               Rewrite
             </Button>
             <Button
+              aria-label="Remove profile"
               variant="ghost"
               size="sm"
               loading={removing}
@@ -120,10 +127,9 @@ export default function AboutWineCard({ wine }: AboutWineCardProps) {
             >
               Remove
             </Button>
-            {note && <span className="text-xs text-ink-muted">{note}</span>}
           </div>
         </div>
       )}
-    </Card>
+    </section>
   );
 }

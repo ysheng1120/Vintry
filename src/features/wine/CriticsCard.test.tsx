@@ -16,7 +16,7 @@ import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import type { Wine, WineCritics } from "../../domain/types";
-import CriticsCard from "./CriticsCard";
+import CriticsSection from "./CriticsCard";
 
 let ai: FakeAi;
 
@@ -42,7 +42,7 @@ async function addWine(overrides: Partial<Wine> = {}): Promise<Wine> {
 /** Renders the card from the live row, as the wine page does. */
 function LiveCard({ id }: { id: string }) {
   const wine = useLiveQuery(() => db.wines.get(id), [id]);
-  return wine ? <CriticsCard wine={wine} /> : null;
+  return wine ? <CriticsSection wine={wine} /> : null;
 }
 
 function renderCard(wine: Wine) {
@@ -122,15 +122,19 @@ async function findButton() {
 
 const toasts = () => within(screen.getByRole("region", { name: "Notifications" }));
 
-describe("CriticsCard", () => {
-  it("shows a disabled button, the note, and Needs AI key when there is no key", async () => {
+describe("CriticsSection (What critics say)", () => {
+  it("shows a disabled button titled Needs AI key, and the note, when there is no key", async () => {
     const wine = await addWine();
     renderCard(wine);
-    expect(await screen.findByRole("button", { name: "Find what critics say" })).toBeDisabled();
+    expect(
+      await screen.findByRole("heading", { level: 3, name: "What critics say" }),
+    ).toBeVisible();
+    const button = await screen.findByRole("button", { name: "Find what critics say" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "Needs AI key");
     expect(
       screen.getByText("Searches reputable wine sites. Uses your AI key (a few web searches)."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Needs AI key")).toBeInTheDocument();
   });
 
   it("finds what critics say and shows the sourced summary with a verified score", async () => {
@@ -145,6 +149,7 @@ describe("CriticsCard", () => {
     expect(await toasts().findByText(/Found what critics say/, {}, SLOW)).toBeInTheDocument();
     expect(toasts().getByRole("button", { name: "Undo" })).toBeInTheDocument();
     expect(await screen.findByText(SUMMARY.consensus)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 4, name: "Scores" })).toBeVisible();
     const score = screen.getByText(/Jancis Robinson: 17\.5\/20/);
     expect(score).toHaveTextContent("(JancisRobinson.com)");
     const scoreLink = within(score).getByRole("link", { name: /^Source:/ });
@@ -157,7 +162,7 @@ describe("CriticsCard", () => {
     expect(screen.getByText(/Researched by AI on/)).toHaveTextContent(
       "Scores are shown only when the source shows them. Check the linked reviews.",
     );
-    expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh critics summary" })).toBeInTheDocument();
     expect(ai.requests).toHaveLength(2);
   });
 
@@ -227,7 +232,7 @@ describe("CriticsCard", () => {
     const wine = await addWine({ critics: SAVED });
     const user = renderCard(wine);
 
-    const remove = await screen.findByRole("button", { name: "Remove" });
+    const remove = await screen.findByRole("button", { name: "Remove critics summary" });
     await waitFor(() => expect(remove).toBeEnabled(), SLOW);
     await user.click(remove);
 

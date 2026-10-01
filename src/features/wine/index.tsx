@@ -31,8 +31,6 @@ import { COLOUR_LABELS, type Wine, type WishlistItem } from "../../domain/types"
 import { formatDate } from "../../lib/format";
 import { useCommandFeedback } from "../../app/commandFeedback";
 import { StatusBadge, WindowSourceBadge } from "../cellar/StatusBadge";
-import AboutWineCard from "./AboutWineCard";
-import CriticsCard from "./CriticsCard";
 import { DrinkSheet } from "./DrinkSheet";
 import { EditWineSheet } from "./EditWineSheet";
 import EstimateWindowButton from "./EstimateWindowButton";
@@ -41,6 +39,7 @@ import { MergeSheet } from "./MergeSheet";
 import { MoveSheet } from "./MoveSheet";
 import { NoteSheet } from "./NoteSheet";
 import { WindowSheet } from "./WindowSheet";
+import WineGuideCard from "./WineGuideCard";
 import { TastingHistory, WineActivity } from "./WineHistory";
 
 type OpenSheet =
@@ -257,8 +256,7 @@ export default function WineDetailPage() {
               <EstimateWindowButton wine={wine} />
             </div>
           </Card>
-          <AboutWineCard wine={wine} />
-          <CriticsCard wine={wine} />
+          <WineGuideCard key={wine.id} wine={wine} />
           {wine.notes && (
             <Card padding="lg">
               <h2 className="mb-2 text-lg font-semibold">Notes</h2>
