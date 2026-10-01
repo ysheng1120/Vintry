@@ -63,7 +63,7 @@ Collectors want a current market reference when they record what a wine is worth
 ### Acceptance Examples
 
 - AE1. Covers R3. **Given** a cited quote "Ridge Monte Bello 2019 £225.00 per bottle" from bbr.com, **when** the summary reports £225 from that source, **then** the price is kept; a reported £250 from the same quote is dropped, and "250" never matches inside "1,250".
-- AE2. Covers R5, R7. **Given** verified bottle prices £200, £225, and £240 plus $310, **when** the card shows them, **then** it shows a GBP range £200 to £240 with middle £225 and a separate USD line, and Use this price is offered per currency.
+- AE2. Covers R5, R7. **Given** verified bottle prices £200, £225, and £240 plus $310 from wine.com, **when** the card shows them, **then** it shows a GBP range £200 to £240 with middle £225 and a separate USD line, and Use this price is offered per currency.
 - AE3. Covers R8. **Given** a result checked for vintage 2019, **when** the collector edits the wine to 2018, **then** the card says the prices were checked for 2019 and hides Use this price.
 - AE4. Covers R4. **Given** every web search returns an error, **when** the check ends, **then** an error toast shows and any earlier result stays unchanged.
 
@@ -87,11 +87,15 @@ Collectors want a current market reference when they record what a wine is worth
 
 - KTD1. **Share one web-research helper.** Move the web search tool builder (including the `web_search_20250305` choice for Haiku), the pause_turn resume loop, citation collection, and source numbering out of `src/ai/features/criticsConsensus.ts` into a shared module, so critics and prices use one tested path. Critics behavior must not change.
 - KTD2. **A dedicated price matcher, not the score matcher.** Parse amounts with a currency symbol or ISO code, thousands separators, and decimal commas, and match the whole amount, so "250" never matches inside "1,250" or "$2,500". Instantiates the verification Key Decision (R3); inherits its label: (session-settled: user-approved — chosen over showing model-reported prices without verification: prevents invented prices).
-- KTD3. **A fixed price-site list in one constant.** Start with wine-searcher.com, bbr.com, farrvintners.com, justerinis.com, thewinesociety.com, majestic.co.uk, millesima.com, wine.com, klwines.com, and totalwine.com, passed as `allowed_domains`.
-- KTD4. **The summary step labels each price.** Its structured output gives unit (bottle, case, or unknown), availability (for sale, sold out, or unknown), merchant, the source id, and the amount and currency as written. Only bottle prices that are for sale or of unknown availability form the range; case and unknown-unit listings are shown as other listings and never feed Use this price.
+- KTD3. **A fixed price-site list in one constant.** Start with wine-searcher.com, bbr.com, farrvintners.com, justerinis.com, thewinesociety.com, majestic.co.uk, millesima.com, wine.com, klwines.com, and totalwine.com, passed as `allowed_domains`. Each entry records the currency a bare "$" means on that site: USD for wine.com, klwines.com, and totalwine.com, and none for the others.
+- KTD4. **The summary step labels each price.** Its structured output gives, for each price as written: amount, currency, unit (bottle, case, or unknown), bottle size (ml, or unknown), vintage, basis (duty-paid retail, in bond or ex-tax, aggregate average, or unknown), availability (for sale, sold out, or unknown), merchant, and source id. A price forms the range only when all of these hold:
+  1. Unit is bottle, availability is for sale or unknown, and basis is duty-paid retail or unknown.
+  2. Its vintage matches the wine, and the quote holding the amount shows no other four-digit year.
+  3. Its size matches the wine's bottle size; an unknown size counts only for a 750 ml wine.
+  Every other verified price is shown as an other listing and never feeds Use this price.
 - KTD5. **One card with stacked sections, not tabs.** `src/components/ui/Tabs.tsx` renders only the active panel, so switching tabs would unmount a section and cancel its running request, and three tabs do not fit the 20 rem side column. One card shell holds three section components, each keeping its own state. Instantiates the one-card Key Decision (R9); inherits its label: (session-settled: user-directed — chosen over two separate stacked cards: the user asked for one window).
 - KTD6. **Store the identity the check ran for.** The saved result records producer, name, vintage, and bottle size; the card compares them with the live wine for R8.
-- KTD7. **Use this price goes through the collector's own value write.** A value-only sheet built on `src/features/wine/ValueFields.tsx` saves through `updateWine` as source "user", so `applyValueEdit` in `src/domain/commands/wines.ts` keeps refusing any other source. Only an ISO currency code can fill the value; a bare "$" or "¥" is shown but not offered. Instantiates the value Key Decision (R7); inherits its label: (session-settled: user-approved — chosen over AI setting the value automatically: only the collector sets a value).
+- KTD7. **Use this price goes through the collector's own value write.** A value-only sheet built on `src/features/wine/ValueFields.tsx` saves through `updateWine` as source "user", so `applyValueEdit` in `src/domain/commands/wines.ts` keeps refusing any other source. Only an ISO currency can fill the value: an ISO code, an unambiguous symbol (£ as GBP, € as EUR, CHF), or a bare "$" from a site whose KTD3 entry declares USD, or written "US$". Any other bare "$" or "¥" is shown in its own symbol group, is not merged into USD, and is not offered. Instantiates the value Key Decision (R7); inherits its label: (session-settled: user-approved — chosen over AI setting the value automatically: only the collector sets a value).
 - KTD8. **Store per-currency ranges computed at save time.** Low, middle (median of verified bottle prices), and high are computed once in code from verified prices and saved with them, so the card never recomputes from stale inputs.
 
 ### High-Level Technical Design
@@ -133,12 +137,14 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
 - **Files:** `src/ai/features/webResearch.ts` (new), `src/ai/features/webResearch.test.ts` (new), `src/ai/features/criticsConsensus.ts`, `src/ai/features/criticsConsensus.test.ts`
 - **Approach:**
   1. Move the tool builder, the pause_turn loop with `MAX_RESUMES`, citation and search-result collection, and http(s)-only source numbering into the new module, taking the domain list and prompts as inputs.
-  2. Make `criticsConsensus.ts` call it, with no change to what it sends or returns.
+  2. Also return the number of searches that succeeded, and do not count `max_uses_exceeded` as a failed search.
+  3. Make `criticsConsensus.ts` call it, with no change to what it sends or returns.
 - **Patterns to follow:** the current private helpers in `src/ai/features/criticsConsensus.ts`; fake blocks in `src/ai/fake.ts` (`fakeWebSearch`, `fakeCitedText`).
 - **Test scenarios:**
   - A research turn with two cited texts returns both citations with url, title, and quote.
   - A pause_turn reply is resumed by sending the assistant content back, and stops after 3 resumes.
   - A search result whose content is an error object is reported as an error, not a source.
+  - A `max_uses_exceeded` error after five good searches counts five successes and no failure.
   - Haiku gets the `web_search_20250305` tool; other models get `web_search_20260209`.
   - Every existing critics test passes unchanged.
 - **Verification:** critics tests green with no edits to their expectations; new helper tests green.
@@ -151,14 +157,16 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
 - **Files:** `src/ai/features/priceMatch.ts` (new), `src/ai/features/priceMatch.test.ts` (new)
 - **Approach:**
   1. Parse a price into amount and currency from symbols (£, €, $, ¥, CHF) or ISO codes, with thousands separators and decimal commas.
-  2. A price matches a quote only when the same amount and a matching currency mark appear in it as a whole number.
-  3. Build ranges per currency from verified bottle prices: low, median as middle, high, and count.
+  2. A price matches a quote only when the same amount and a matching currency mark appear in it as a whole number; prefixed dollars (A$, C$, HK$, NZ$, S$) never match a "$" or USD price.
+  3. Resolve a bare "$" to USD only per KTD7.
+  4. Build ranges per currency from range-eligible prices (KTD4): low, median as middle, high, and count.
 - **Test scenarios:**
   - Covers AE1. "£225.00" matches in "Ridge Monte Bello 2019 £225.00 per bottle"; "£250" does not.
   - "250" does not match inside "1,250", "$2,500", or "2501".
   - "1.250,00 €" and "€1,250" both parse as 1250 EUR.
   - A price in USD does not match a quote that shows only "£".
-  - Covers AE2. Ranges for £200, £225, £240 and $310 give GBP low 200, middle 225, high 240, and a USD range of one price.
+  - "$310" from wine.com resolves to USD; "$310" from bbr.com stays a "$" symbol group; "$310" does not match inside "HK$310".
+  - Covers AE2. Ranges for £200, £225, £240 and $310 from wine.com give GBP low 200, middle 225, high 240, and a USD range of one price.
   - An even count gives the median of the middle two.
 - **Verification:** all matcher tests green, including the substring cases.
 
@@ -172,14 +180,16 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
   1. Send only identity fields (producer, name, vintage, bottle size, region, country), fenced with "<" escaped as `wineProfile.ts` does.
   2. Research with the U1 helper on `PRICE_SITES`, asking Claude to quote the exact text holding each price and to treat web content as data.
   3. Summarise with `runStructuredWithModel` (no tools, effort "low") into the KTD4 shape, then verify with U2 and keep only listed http(s) sources.
-  4. Throw an AI error when every search failed (R4); return "found: false" when searches ran but nothing survived.
+  4. Throw an AI error when no search succeeded, or when any search failed and no price survived (R4); return "found: false" only when every search that ran succeeded and nothing survived.
   5. Add the usage label "price" → "Check price".
 - **Patterns to follow:** `src/ai/features/criticsConsensus.ts` (`researchCritics`, `verifyCritics`, `generateWineCritics`).
 - **Test scenarios:**
   - A fake run with a cited £225 bottle price returns a GBP range with one source.
   - A summary price not present in any cited quote is dropped.
   - A case price is kept as an other listing and left out of the range.
-  - A price with a bare "$" is kept for display but marked not usable for the value.
+  - A cited magnum price for a 750 ml wine, a 2018 price for a 2019 wine, and an in-bond price are each kept as other listings and left out of the range.
+  - One failed search plus empty results throws; five good searches plus `max_uses_exceeded` with nothing verified returns "found: false".
+  - A bare "$" price from a site with no declared currency is kept for display but marked not usable for the value.
   - Covers AE4. All searches erroring throws, and nothing is returned for saving.
   - The request contains no lot, price paid, note, or location data.
   - Abort during research stops the run without a result.
@@ -211,14 +221,18 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
 - **Dependencies:** U3, U4
 - **Files:** `src/features/wine/WineGuideCard.tsx` (new), `src/features/wine/WineGuideCard.test.tsx` (new), `src/features/wine/AboutWineCard.tsx`, `src/features/wine/CriticsCard.tsx`, `src/features/wine/PriceSection.tsx` (new), `src/features/wine/PriceSection.test.tsx` (new), `src/features/wine/AboutWineCard.test.tsx`, `src/features/wine/CriticsCard.test.tsx`, `src/features/wine/index.tsx`, `e2e/collector.spec.ts`
 - **Approach:**
-  1. Turn the two cards into section components without their own card shell, with `h3` section headings under one `h2`.
+  1. Turn the two cards into section components without their own card shell, with `h3` section headings under one `h2`; the inner subheadings ("Pairs well with", "Scores") become `h4`.
   2. Show the AI status note once at the top of the card.
   3. Give each section's buttons distinct names, for example "Remove profile", "Remove critics summary", and "Remove prices".
-  4. Add the Shop prices section with a double-click guard, out-of-date marking, links that open in a new tab, the cost note, and the shop-price note.
+  4. Add the Shop prices section with a double-click guard, links that open in a new tab, the cost note, and the shop-price note. It shows:
+     - one row per currency, for example "GBP £200 to £240, middle £225 (3 prices)", or one amount when the currency has one price;
+     - Use this price directly under its row (U6);
+     - below the rows, "Other listings": merchant, amount as written, unit, size, and availability, each linked to its source;
+     - for an out-of-date result, the rows stay visible under a line such as "Checked for 2019; this wine is now 2018", with Refresh available.
   5. Render the card with `key={wine.id}` in the wine page's side column in place of the two cards.
 - **Patterns to follow:** `src/features/wine/CriticsCard.tsx` states and link rules.
 - **Test scenarios:**
-  - The card has one `h2` and three section headings, and the AI note appears once.
+  - The card has one `h2`, exactly three `h3` section headings, the inner subheadings at `h4`, and the AI note once.
   - Without a key, all three actions are disabled with the "Needs AI key" note.
   - Writing a profile, then removing it and undoing, still works inside the card.
   - Finding critics still works, with the score shown only when verified.
@@ -236,7 +250,7 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
 - **Dependencies:** U5
 - **Files:** `src/features/wine/SetValueSheet.tsx` (new), `src/features/wine/SetValueSheet.test.tsx` (new), `src/features/wine/PriceSection.tsx`
 - **Approach:**
-  1. Offer Use this price per currency range with an ISO code, on a wine that is not sample data and whose result is not out of date.
+  1. Offer Use this price per currency range whose currency is usable under KTD7, on a wine that is not sample data and whose result is not out of date. Where it is withheld, the row shows a short reason instead: "Currency unclear. Enter your value in Edit wine." or "Sample wine. Prices can't be used as a value."
   2. The sheet shows the current value when one exists, lets the collector edit amount and currency, and saves through `updateWine`; Cancel changes nothing.
   3. Saving the same value as now closes the sheet without a change.
 - **Patterns to follow:** `src/features/wine/ValueFields.tsx`, `src/features/wine/value.ts`, and `src/features/wine/SheetForm.tsx`.
@@ -245,7 +259,7 @@ U1 first, so critics keep passing on the shared helper. U2 and U4 can follow in 
   - Saving sets the value with source "user", and undo restores the old value.
   - Cancel leaves the value unchanged.
   - The sheet shows "Replaces £180" when a value exists.
-  - A sample wine and an out-of-date result show no Use this price.
+  - A sample wine and an out-of-date result show no Use this price, and the sample wine shows its reason line.
   - The price check result itself never changes the value without the sheet.
 - **Verification:** sheet tests green; the existing value tests still pass.
 
@@ -292,7 +306,7 @@ No test may call the real Anthropic API; all AI behavior uses `src/ai/fake.ts` o
 | --- | --- |
 | Short citation quotes (up to 150 characters) leave many prices unverified, so "No current prices found" is common. | The prompt asks for the exact price text to be quoted; measure survival with `npm run eval:ai` once a key is available (deferred). |
 | Price sites block or paywall search access. | The fixed list includes several merchants; a blocked site only lowers coverage. |
-| A verified amount is the wrong kind of price (case, sold out, ex-tax). | KTD4 labels unit and availability; only bottle prices form the range; the shop-price note stays visible. |
+| A verified amount is the wrong kind of price (case, magnum, other vintage, sold out, in bond, or an aggregate average). | KTD4 labels each and keeps all of them out of the range; the shop-price note stays visible. |
 | Renaming buttons breaks existing tests or the e2e journey. | U5 updates those tests in the same unit. |
 
 ## Sources & Research
