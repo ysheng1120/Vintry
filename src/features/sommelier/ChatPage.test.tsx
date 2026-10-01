@@ -63,6 +63,15 @@ afterEach(() => {
   uninstallFakeAi();
 });
 
+/** Sending runs several database writes and the AI call; under full-suite load it can pass 1s. */
+const SLOW = { timeout: 5000 };
+
+async function clickSend(user: ReturnType<typeof userEvent.setup>) {
+  const send = screen.getByRole("button", { name: "Send" });
+  await waitFor(() => expect(send).toBeEnabled(), SLOW);
+  await user.click(send);
+}
+
 describe("Sommelier chat", () => {
   it("explains that a key is needed and offers the cellar instead", async () => {
     renderChat("/sommelier");
@@ -88,7 +97,7 @@ describe("Sommelier chat", () => {
     await user.click(await screen.findByRole("button", { name: "What should I open tonight?" }));
 
     expect(
-      await screen.findByText("The Monte Bello is ready. Open it tonight."),
+      await screen.findByText("The Monte Bello is ready. Open it tonight.", {}, SLOW),
     ).toBeInTheDocument();
     expect(screen.getByTestId("path").textContent).toMatch(/^\/sommelier\/[\w-]+$/);
     const log = screen.getByRole("log", { name: "Conversation" });
@@ -115,9 +124,9 @@ describe("Sommelier chat", () => {
       screen.getByRole("textbox", { name: /ask the sommelier/i }),
       "When should I drink it?",
     );
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await clickSend(user);
 
-    expect(await screen.findByText("Drink it from 2025.")).toBeInTheDocument();
+    expect(await screen.findByText("Drink it from 2025.", {}, SLOW)).toBeInTheDocument();
     expect(textOf(ai.requests[0]?.messages[0])).toContain(`wine id ${wine.id}`);
     expect(screen.getByTestId("path").textContent).toContain(`?wine=${wine.id}`);
   });
@@ -137,8 +146,8 @@ describe("Sommelier chat", () => {
     expect(ai.requests).toHaveLength(0);
 
     ai.queueText("Try the Barolo.");
-    await user.click(screen.getByRole("button", { name: "Send" }));
-    await screen.findByText("Try the Barolo.");
+    await clickSend(user);
+    await screen.findByText("Try the Barolo.", {}, SLOW);
     expect(ai.requests).toHaveLength(1);
   });
 
@@ -174,7 +183,7 @@ describe("Sommelier chat", () => {
       await screen.findByRole("textbox", { name: /ask the sommelier/i }),
       "I drank a Monte Bello",
     );
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await clickSend(user);
 
     const card = await screen.findByRole("group", {
       name: "Drink 1 bottle of Ridge Monte Bello 2019",
@@ -182,7 +191,7 @@ describe("Sommelier chat", () => {
     expect(within(card).getByText("From Kitchen rack: 6 now, 5 after")).toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Confirm" }));
 
-    expect(await screen.findByText("Recorded. You have 5 left.")).toBeInTheDocument();
+    expect(await screen.findByText("Recorded. You have 5 left.", {}, SLOW)).toBeInTheDocument();
     expect(within(card).getByText("Done")).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
     expect((await db.lots.get(lot.id))?.quantity).toBe(5);
@@ -252,10 +261,10 @@ describe("Sommelier chat", () => {
       await screen.findByRole("textbox", { name: /ask the sommelier/i }),
       "I bought 3 Geyserville 2021",
     );
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await clickSend(user);
 
     await user.click(await screen.findByRole("button", { name: "Add 3 bottles" }));
-    expect(await screen.findByText("Added them.")).toBeInTheDocument();
+    expect(await screen.findByText("Added them.", {}, SLOW)).toBeInTheDocument();
     const batches = await db.eventBatches.toArray();
     expect(batches.map((b) => [b.source, b.summary])).toEqual([
       ["ai-chat", "Added 3 bottles of Ridge Geyserville 2021"],
