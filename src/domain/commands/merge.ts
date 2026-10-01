@@ -8,6 +8,11 @@ import { CommandError, defineCommand, notFound, type CommandContext } from "./co
 
 function isEmptyValue(value: unknown): boolean {
   if (value === null || value === undefined) return true;
+  // A researched result that found nothing ("found: false") holds nothing worth keeping, so a real
+  // result from the other wine takes its place.
+  if (typeof value === "object" && !Array.isArray(value) && "found" in value) {
+    return (value as { found: unknown }).found === false;
+  }
   if (typeof value === "string") return value.trim() === "";
   if (Array.isArray(value)) return value.length === 0;
   return false;
@@ -28,6 +33,7 @@ const FILLABLE_FIELDS = [
   "notes",
   "profile",
   "critics",
+  "priceCheck",
 ] as const satisfies readonly (keyof Wine)[];
 
 /**
