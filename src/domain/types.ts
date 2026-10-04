@@ -114,78 +114,6 @@ export const WineCriticsSchema = z.object({
 });
 export type WineCritics = z.infer<typeof WineCriticsSchema>;
 
-/** What a price is quoted per (KTD4). Only a bottle can feed the range. */
-export const PriceUnitSchema = z.enum(["bottle", "case", "unknown"]);
-/** The tax basis a price is quoted on (KTD4). Only duty-paid retail or unknown can feed the range. */
-export const PriceBasisSchema = z.enum([
-  "duty-paid retail",
-  "in bond or ex-tax",
-  "aggregate average",
-  "unknown",
-]);
-/** Whether the shop has the wine (KTD4). Sold out never feeds the range. */
-export const PriceAvailabilitySchema = z.enum(["for sale", "sold out", "unknown"]);
-
-/**
- * "Check price": shop prices for this exact wine, researched on a fixed list of price sites. Every
- * listing keeps the page it came from and is saved only when its amount appears in text quoted from
- * that page (checked in code). Prices are never converted between currencies (R5); each range is
- * one currency and was computed in code at save time from the verified, usable bottle prices (KTD8).
- */
-export const WinePriceCheckSchema = z.object({
-  /** The wine's identity when the check ran, so the card can tell when it is out of date (KTD6). */
-  checkedFor: z.object({
-    producer: z.string(),
-    name: z.string(),
-    /** null means non-vintage (NV). */
-    vintage: YearSchema.nullable(),
-    bottleSize: z.number().int().positive(),
-  }),
-  ranges: z
-    .array(
-      z.object({
-        /** The currency as resolved: an ISO code, or a symbol that could not be resolved. */
-        currency: z.string(),
-        low: z.number(),
-        /** Median of the usable bottle prices. */
-        middle: z.number(),
-        high: z.number(),
-        /** How many listings the range was computed from. */
-        count: z.number().int().min(0),
-        /** True when the currency is an ISO code, so Use this price may offer it (KTD7). */
-        usable: z.boolean(),
-      }),
-    )
-    .default([]),
-  listings: z
-    .array(
-      z.object({
-        /** The amount as the page writes it, e.g. "£1,250". */
-        amount: z.string(),
-        /** The amount as a number. */
-        value: z.number(),
-        /** As resolved: an ISO code, or the page's own symbol such as "$" when it was ambiguous. */
-        currency: z.string(),
-        merchant: z.string(),
-        unit: PriceUnitSchema,
-        /** Bottle size in ml, or null when the page does not say. */
-        sizeMl: z.number().nullable(),
-        vintage: z.number().nullable(),
-        basis: PriceBasisSchema,
-        availability: PriceAvailabilitySchema,
-        /** True when this listing is part of its currency's range; false for an "other listing". */
-        inRange: z.boolean(),
-        source: CriticSourceSchema,
-      }),
-    )
-    .default([]),
-  /** False when no price survived verification ("No current prices found"). */
-  found: z.boolean(),
-  generatedAt: z.string(),
-  model: z.string(),
-});
-export type WinePriceCheck = z.infer<typeof WinePriceCheckSchema>;
-
 export const WineSchema = z.object({
   ...base,
   producer: z.string().min(1),
@@ -223,8 +151,6 @@ export const WineSchema = z.object({
   profile: WineProfileSchema.nullable().optional(),
   /** "What critics say", researched on the web from this wine's identity. Missing on older rows. */
   critics: WineCriticsSchema.nullable().optional(),
-  /** "Check price": shop prices for this exact wine, with sources. Missing on older rows. */
-  priceCheck: WinePriceCheckSchema.nullable().optional(),
 });
 export type Wine = z.infer<typeof WineSchema>;
 

@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { changelogEntry, changelogNewestFirst } from "./changelog";
 
 describe("changelog", () => {
-  it("has 1.4.0 first, and keeps 1.3.0, 1.2.0 and earlier releases", () => {
-    const [newest, second, third] = changelogNewestFirst();
-    expect(newest?.version).toBe("1.4.0");
-    expect(newest?.date).toBe("2026-10-01");
+  it("has 1.5.0 first, and keeps 1.4.0, 1.3.0, 1.2.0 and earlier releases", () => {
+    const [newest, previous, second, third] = changelogNewestFirst();
+    expect(newest?.version).toBe("1.5.0");
+    expect(newest?.date).toBe("2026-10-04");
     const latest = newest?.changes.join("\n") ?? "";
-    expect(latest).toMatch(/Check price/);
-    expect(latest).toMatch(/Use this price/);
-    expect(latest).toMatch(/one card/);
+    expect(latest).toMatch(/Parker/);
+    expect(latest).toMatch(/Activity/);
+    expect(latest).toMatch(/Check price .*removed/);
+    expect(previous?.version).toBe("1.4.0");
+    expect(previous?.changes.join("\n")).toMatch(/one card/);
     expect(second?.version).toBe("1.3.0");
     expect(second?.changes.join("\n")).toMatch(/Automatic|backup/i);
     expect(third?.version).toBe("1.2.0");

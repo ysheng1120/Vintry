@@ -7,7 +7,6 @@ export * from "./merge";
 export * from "./windows";
 export * from "./wineProfile";
 export * from "./wineCritics";
-export * from "./winePriceCheck";
 export * from "./notes";
 export * from "./locations";
 export * from "./wishlist";

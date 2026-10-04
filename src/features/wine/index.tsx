@@ -235,6 +235,7 @@ export default function WineDetailPage() {
             onMove={(lotId) => setSheet({ kind: "move", lotId })}
           />
           <TastingHistory detail={detail} />
+          <WineActivity detail={detail} />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Card padding="lg">
@@ -263,7 +264,6 @@ export default function WineDetailPage() {
               <p className="whitespace-pre-line text-ink-muted">{wine.notes}</p>
             </Card>
           )}
-          <WineActivity detail={detail} />
         </div>
       </div>
 

@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.0",
+    date: "2026-10-04",
+    headline: "A simpler wine page, and critics without Robert Parker.",
+    changes: [
+      "What critics say is now What others (excl. Parker) say. Claude leaves out Robert Parker and Robert Parker Wine Advocate, and Vintry also hides him in summaries you saved before.",
+      "Activity now sits below Drinks and notes, so the wine page is more even.",
+      "Check price and Use this price are removed. They rarely found a price. Your own value stays as it is.",
+    ],
+  },
+  {
     version: "1.4.0",
     date: "2026-10-01",
     headline: "Check price, and one card for everything Claude knows about a wine.",

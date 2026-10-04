@@ -89,7 +89,7 @@ async function enabledButton(name: string) {
 }
 
 describe("WineGuideCard", () => {
-  it("has one h2, three h3 sections, h4 subheadings, and the AI note once", async () => {
+  it("has one h2, two h3 sections, h4 subheadings, and the AI note once", async () => {
     const wine = await addWine({ profile: SAVED_PROFILE, critics: SAVED_CRITICS });
     renderCard(wine);
 
@@ -97,19 +97,18 @@ describe("WineGuideCard", () => {
     expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
     expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
       "Profile",
-      "What critics say",
-      "Shop prices",
+      "What others (excl. Parker) say",
     ]);
     expect(screen.getByRole("heading", { level: 4, name: "Pairs well with" })).toBeVisible();
     expect(screen.getByRole("heading", { level: 4, name: "Scores" })).toBeVisible();
     expect(screen.getAllByText("Needs AI key")).toHaveLength(1);
   });
 
-  it("disables all three actions without a key", async () => {
+  it("disables both actions without a key", async () => {
     const wine = await addWine();
     renderCard(wine);
 
-    for (const name of ["Write a profile", "Find what critics say", "Check price"]) {
+    for (const name of ["Write a profile", "Find what others say"]) {
       const button = await screen.findByRole("button", { name });
       expect(button).toBeDisabled();
       expect(button).toHaveAttribute("title", "Needs AI key");
@@ -127,7 +126,6 @@ describe("WineGuideCard", () => {
       "Remove profile",
       "Refresh critics summary",
       "Remove critics summary",
-      "Check price",
     ]) {
       expect(await screen.findAllByRole("button", { name })).toHaveLength(1);
     }
@@ -154,7 +152,7 @@ describe("WineGuideCard", () => {
     expect((await db.wines.get(wine.id))?.profile).toMatchObject(PROFILE);
   });
 
-  it("finds what critics say inside the card, showing a verified score", async () => {
+  it("finds what others say inside the card, showing a verified score", async () => {
     await saveApiKey("sk-ant-test");
     const wine = await addWine();
     ai.queueResponse({
@@ -178,7 +176,7 @@ describe("WineGuideCard", () => {
     });
     const user = renderCard(wine);
 
-    await user.click(await enabledButton("Find what critics say"));
+    await user.click(await enabledButton("Find what others say"));
 
     expect(
       await screen.findByText("Critics find it long and savoury.", {}, SLOW),

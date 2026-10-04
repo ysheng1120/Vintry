@@ -1,6 +1,10 @@
 import { Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { generateWineCritics, NO_REVIEWS_MESSAGE } from "../../ai/features/criticsConsensus";
+import {
+  generateWineCritics,
+  NO_REVIEWS_MESSAGE,
+  withoutParker,
+} from "../../ai/features/criticsConsensus";
 import { isHttpUrl } from "../../ai/features/webResearch";
 import { aiStatusNote, useAiStatus } from "../../ai/useAiStatus";
 import { useCommandFeedback } from "../../app/commandFeedback";
@@ -15,7 +19,7 @@ export interface CriticsSectionProps {
 }
 
 /**
- * The "What critics say" section of the About this wine card: on request, Claude searches
+ * The "What others (excl. Parker) say" section of the About this wine card: on request, Claude searches
  * reputable wine sites for this wine and the app shows a short, sourced summary. Scores are shown
  * only when the text cited from their source shows them (checked in criticsConsensus.ts).
  * Finding, refreshing, and removing it are undoable commands (KTD4); only the wine's identity is
@@ -42,7 +46,7 @@ export default function CriticsSection({ wine }: CriticsSectionProps) {
       const result = await generateWineCritics(wine, { signal: controller.signal });
       if (!controller.signal.aborted) done(result);
     } catch (error) {
-      if (!controller.signal.aborted) failed(error, "Couldn't find what critics say");
+      if (!controller.signal.aborted) failed(error, "Couldn't find what others say");
     } finally {
       runningRef.current = false;
       if (!controller.signal.aborted) setFinding(false);
@@ -56,14 +60,19 @@ export default function CriticsSection({ wine }: CriticsSectionProps) {
     try {
       done(await setWineCritics({ wineId: wine.id, critics: null }));
     } catch (error) {
-      failed(error, "Couldn't remove what critics say");
+      failed(error, "Couldn't remove what others say");
     } finally {
       runningRef.current = false;
       setRemoving(false);
     }
   };
 
-  const critics = wine.critics;
+  // Robert Parker is left out, also from summaries saved before that rule.
+  const saved = wine.critics ? withoutParker(wine.critics) : null;
+  const critics =
+    saved?.found && saved.points.length === 0 && saved.scores.length === 0
+      ? { ...saved, consensus: "", found: false }
+      : saved;
   const note = aiStatusNote(status);
   const busy = finding || removing;
   const disabled = status.state !== "ready" || busy;
@@ -80,7 +89,7 @@ export default function CriticsSection({ wine }: CriticsSectionProps) {
 
   return (
     <section>
-      <h3 className="mb-1 text-base font-semibold">What critics say</h3>
+      <h3 className="mb-1 text-base font-semibold">What others (excl. Parker) say</h3>
       {!critics ? (
         <>
           <p className="text-sm text-ink-muted">
@@ -96,7 +105,7 @@ export default function CriticsSection({ wine }: CriticsSectionProps) {
               title={note ?? undefined}
               onClick={() => void find()}
             >
-              {finding ? "Searching…" : "Find what critics say"}
+              {finding ? "Searching…" : "Find what others say"}
             </Button>
           </div>
         </>

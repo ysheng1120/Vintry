@@ -19,8 +19,8 @@ export const setWineCriticsCommand = defineCommand({
     await changes.update("wines", wineId, { critics });
     const label = wineLabel(wine);
     let summary: string;
-    if (!critics) summary = `Removed what critics say about ${label}`;
-    else if (critics.found) summary = `Found what critics say about ${label}`;
+    if (!critics) summary = `Removed what others say about ${label}`;
+    else if (critics.found) summary = `Found what others say about ${label}`;
     else summary = `No critic reviews found for ${label}`;
     return { summary };
   },

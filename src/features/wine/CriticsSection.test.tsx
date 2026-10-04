@@ -115,21 +115,21 @@ const SLOW = { timeout: 5000 };
 
 /** The Find button once the saved key has loaded (it is disabled until then). */
 async function findButton() {
-  const button = await screen.findByRole("button", { name: "Find what critics say" });
+  const button = await screen.findByRole("button", { name: "Find what others say" });
   await waitFor(() => expect(button).toBeEnabled(), SLOW);
   return button;
 }
 
 const toasts = () => within(screen.getByRole("region", { name: "Notifications" }));
 
-describe("CriticsSection (What critics say)", () => {
+describe("CriticsSection (What others say)", () => {
   it("shows a disabled button titled Needs AI key, and the note, when there is no key", async () => {
     const wine = await addWine();
     renderCard(wine);
     expect(
-      await screen.findByRole("heading", { level: 3, name: "What critics say" }),
+      await screen.findByRole("heading", { level: 3, name: "What others (excl. Parker) say" }),
     ).toBeVisible();
-    const button = await screen.findByRole("button", { name: "Find what critics say" });
+    const button = await screen.findByRole("button", { name: "Find what others say" });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("title", "Needs AI key");
     expect(
@@ -146,7 +146,7 @@ describe("CriticsSection (What critics say)", () => {
 
     await user.click(await findButton());
 
-    expect(await toasts().findByText(/Found what critics say/, {}, SLOW)).toBeInTheDocument();
+    expect(await toasts().findByText(/Found what others say/, {}, SLOW)).toBeInTheDocument();
     expect(toasts().getByRole("button", { name: "Undo" })).toBeInTheDocument();
     expect(await screen.findByText(SUMMARY.consensus)).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 4, name: "Scores" })).toBeVisible();
@@ -227,6 +227,35 @@ describe("CriticsSection (What critics say)", () => {
     expect(links[0]).toHaveTextContent("[1]");
   });
 
+  it("hides Robert Parker in a summary saved before he was left out", async () => {
+    const withParker: WineCritics = {
+      ...SAVED,
+      consensus: "Critics like it. Parker called it a classic.",
+      points: [
+        ...SAVED.points,
+        { text: "Parker loved it", sources: [{ url: DECANTER, title: "Decanter" }] },
+      ],
+      scores: [
+        ...SAVED.scores,
+        {
+          critic: "Robert Parker",
+          publication: "",
+          score: "98",
+          scale: "100",
+          source: { url: DECANTER, title: "Decanter" },
+        },
+      ],
+    };
+    const wine = await addWine({ critics: withParker });
+    renderCard(wine);
+
+    expect(await screen.findByText("Critics like it.")).toBeInTheDocument();
+    for (const text of [/called it a classic/, /Parker loved it/, /Robert Parker/]) {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
+    }
+    expect(screen.getByText(/Jancis Robinson: 17\.5\/20/)).toBeInTheDocument();
+  });
+
   it("removes the summary and Undo brings it back", async () => {
     await saveApiKey("sk-ant-test");
     const wine = await addWine({ critics: SAVED });
@@ -236,8 +265,8 @@ describe("CriticsSection (What critics say)", () => {
     await waitFor(() => expect(remove).toBeEnabled(), SLOW);
     await user.click(remove);
 
-    expect(await toasts().findByText(/Removed what critics say/, {}, SLOW)).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Find what critics say" })).toBeEnabled();
+    expect(await toasts().findByText(/Removed what others say/, {}, SLOW)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Find what others say" })).toBeEnabled();
     expect((await db.wines.get(wine.id))?.critics).toBeNull();
 
     await user.click(toasts().getByRole("button", { name: "Undo" }));
@@ -255,8 +284,8 @@ describe("CriticsSection (What critics say)", () => {
     await user.click(await findButton());
 
     expect(await toasts().findByText(/Too many requests/, {}, SLOW)).toBeInTheDocument();
-    expect(toasts().getByText("Couldn't find what critics say")).toBeInTheDocument();
+    expect(toasts().getByText("Couldn't find what others say")).toBeInTheDocument();
     expect((await db.wines.get(wine.id))?.critics).toBeUndefined();
-    expect(screen.getByRole("button", { name: "Find what critics say" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Find what others say" })).toBeEnabled();
   });
 });

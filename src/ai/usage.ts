@@ -12,7 +12,8 @@ export const FEATURE_LABELS: Record<string, string> = {
   window: "Drinking windows",
   note: "Tasting notes",
   profile: "About this wine",
-  critics: "What critics say",
+  critics: "What others say",
+  // Check price was removed in 1.5.0; kept so older usage rows still show a name.
   price: "Check price",
   csv: "CSV mapping",
   chat: "Sommelier",

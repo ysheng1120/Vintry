@@ -52,7 +52,7 @@ describe("setWineCritics", () => {
     const wine = await seedWine();
     const result = await setWineCritics({ wineId: wine.id, critics: CRITICS });
     expect(await db.wines.get(wine.id)).toMatchObject({ critics: CRITICS });
-    expect(result.summary).toBe("Found what critics say about Ridge Monte Bello 2019");
+    expect(result.summary).toBe("Found what others say about Ridge Monte Bello 2019");
   });
 
   it("says so when no reviews were found", async () => {
@@ -69,7 +69,7 @@ describe("setWineCritics", () => {
     await setWineCritics({ wineId: wine.id, critics: CRITICS });
     const result = await setWineCritics({ wineId: wine.id, critics: null });
     expect((await db.wines.get(wine.id))?.critics).toBeNull();
-    expect(result.summary).toBe("Removed what critics say about Ridge Monte Bello 2019");
+    expect(result.summary).toBe("Removed what others say about Ridge Monte Bello 2019");
     expect(await undoBatch(result.batchId!)).toMatchObject({ ok: true });
     expect((await db.wines.get(wine.id))?.critics).toEqual(CRITICS);
   });

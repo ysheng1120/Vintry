@@ -19,7 +19,7 @@ You can also put Vintry at your own free web address that updates itself, instal
 - **Add wine your way:** scan a label, type one sentence ("bought 6 bottles of 2019 Ridge Monte Bello at $250 each"), fill in a short form, or import a CSV from CellarTracker, Vivino, or a spreadsheet.
 - **Know what to drink:** Home shows what is ready now, what to drink soon, what is past its peak, and what has no drinking window yet.
 - **Ask the sommelier:** "What should I open with roast lamb tonight?" It answers from the bottles you actually have, and it can suggest changes that you confirm with one tap.
-- **Check a price:** with an AI key, see current shop prices for a wine as a range for each currency, with a link to each shop. You choose whether to use one as your value.
+- **Learn about a wine:** with an AI key, get a short profile and a sourced summary of what critics say (Robert Parker left out), with a link to each review.
 - **Keep records:** drink a bottle with a rating and note, move bottles between locations and bins, keep tasting notes, a wishlist, history, and stats with a yearly recap.
 - **Tidy up:** merge two records of the same wine in one step.
 - **Undo anything:** every change can be undone from the toast or from History.

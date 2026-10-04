@@ -138,8 +138,11 @@ describe("Sommelier chat", () => {
       `/sommelier?ask=${encodeURIComponent("  What should I open tonight?  ")}`,
     );
     const input = await screen.findByRole("textbox", { name: /ask the sommelier/i });
-    expect(input).toHaveValue("What should I open tonight?");
-    expect(input).toHaveFocus();
+    // The prefill and focus run in an effect after the composer first renders.
+    await waitFor(() => {
+      expect(input).toHaveValue("What should I open tonight?");
+      expect(input).toHaveFocus();
+    });
     await waitFor(() => expect(screen.getByTestId("path")).not.toHaveTextContent("ask"));
 
     // The user must press Send; nothing was sent on their behalf.

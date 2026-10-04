@@ -19,7 +19,8 @@ async function seedManyWines(count: number) {
 
 const rows = () => within(screen.getByRole("list", { name: "Wines" })).getAllByRole("link");
 
-describe("Cellar list pagination", () => {
+// Each test renders up to 240 rows, which takes about 4s alone and longer under full-suite load.
+describe("Cellar list pagination", { timeout: 20_000 }, () => {
   it("renders only the first 100 rows and reveals more with the Show more button", async () => {
     await seedManyWines(240);
     const { user } = renderCellarApp("/cellar");

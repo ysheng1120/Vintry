@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
-import type { WinePriceCheck } from "../types";
 import { undoBatch } from "../undo";
 import { CommandError } from "./core";
 import { consumeBottles } from "./consumption";
@@ -15,20 +14,6 @@ const ridge = {
   vintage: 2019,
   colour: "red" as const,
 };
-
-/** A stored price check; `found: false` is the "No current prices found" result. */
-function makePriceCheck(found: boolean): WinePriceCheck {
-  return {
-    checkedFor: { producer: "Ridge", name: "Monte Bello", vintage: 2019, bottleSize: 750 },
-    ranges: found
-      ? [{ currency: "GBP", low: 180, middle: 195, high: 210, count: 3, usable: true }]
-      : [],
-    listings: [],
-    found,
-    generatedAt: found ? "2026-10-01T12:00:00.000Z" : "2026-09-30T12:00:00.000Z",
-    model: "claude-opus-5",
-  };
-}
 
 /** Two wines describing the same bottle: `keep` (with a lot) and `merge` (a lot, a note, a drink). */
 async function seedDuplicates() {
@@ -173,38 +158,6 @@ describe("mergeWines", () => {
     await mergeWines({ keepId: keep.id, mergeId: merge.id });
 
     expect((await db.wines.get(keep.id))?.critics).toEqual(real);
-  });
-
-  it("keeps the duplicate's price check when the kept wine has none", async () => {
-    const { keep, merge } = await seedDuplicates();
-    const priceCheck = makePriceCheck(true);
-    await db.wines.update(merge.id, { priceCheck });
-
-    await mergeWines({ keepId: keep.id, mergeId: merge.id });
-
-    expect((await db.wines.get(keep.id))?.priceCheck).toEqual(priceCheck);
-  });
-
-  it("keeps the merged wine's real price check when the kept wine has a found: false result", async () => {
-    const { keep, merge } = await seedDuplicates();
-    const real = makePriceCheck(true);
-    await db.wines.update(keep.id, { priceCheck: makePriceCheck(false) });
-    await db.wines.update(merge.id, { priceCheck: real });
-
-    await mergeWines({ keepId: keep.id, mergeId: merge.id });
-
-    expect((await db.wines.get(keep.id))?.priceCheck).toEqual(real);
-  });
-
-  it("keeps the kept wine's real price check over a merged found: false result", async () => {
-    const { keep, merge } = await seedDuplicates();
-    const real = makePriceCheck(true);
-    await db.wines.update(keep.id, { priceCheck: real });
-    await db.wines.update(merge.id, { priceCheck: makePriceCheck(false) });
-
-    await mergeWines({ keepId: keep.id, mergeId: merge.id });
-
-    expect((await db.wines.get(keep.id))?.priceCheck).toEqual(real);
   });
 
   it("undo restores the exact before state: lots, drink and note move back, the kept wine's filled fields clear, and the merged wine is undeleted", async () => {

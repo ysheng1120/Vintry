@@ -238,7 +238,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     blocks: [
       {
         kind: "text",
-        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, write an About this wine profile, see What critics say (with a link to each review), check shop prices for a wine (with a link to each shop), tidy tasting notes, map unusual CSV files, and ask the sommelier.",
+        text: "Vintry works without AI. With an AI key you can also scan labels, add wine by typing one sentence, get drinking-window estimates, write an About this wine profile, see what others (not Robert Parker) say about a wine (with a link to each review), tidy tasting notes, map unusual CSV files, and ask the sommelier.",
       },
       {
         kind: "text",
@@ -261,30 +261,6 @@ export const HELP_SECTIONS: HelpSection[] = [
     links: [{ to: "/settings", label: "Settings" }],
   },
   {
-    id: "check-price",
-    title: "Check a price",
-    blocks: [
-      {
-        kind: "steps",
-        items: [
-          "Open the wine and find the Shop prices part of the About this wine card.",
-          "Click Check price. It searches a fixed list of wine shops and uses your AI key.",
-          "Read the result: a range for each currency, with a link to each shop. Vintry never converts one currency into another.",
-          "Click Use this price to open a sheet with the middle price filled in. Your value changes only when you save the sheet.",
-        ],
-      },
-      {
-        kind: "text",
-        text: "Shop prices are often above auction or collector prices, so treat them as a guide. If you change the wine's vintage or bottle size later, the old result is marked out of date.",
-      },
-      {
-        kind: "text",
-        text: "About this wine, What critics say, and Shop prices now share one card on the wine page. Each part has its own button, and you can remove or undo each one.",
-      },
-    ],
-    links: [{ to: "/cellar", label: "Cellar" }],
-  },
-  {
     id: "privacy",
     title: "Privacy",
     blocks: [
@@ -292,7 +268,7 @@ export const HELP_SECTIONS: HelpSection[] = [
         kind: "list",
         items: [
           "Your cellar and your AI key stay in your browser on your computer. Vintry has no server and no account.",
-          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine and for What critics say (Anthropic uses it to search reputable wine sites), the wine's producer, name, vintage, bottle size and origin for Check price (Anthropic uses it to search a fixed list of wine shops), the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.",
+          "When you use an AI feature, only what that feature needs goes to Anthropic under your own key: the label photo you scan, the sentence you type, the tasting note you tidy, the wine details for a drinking-window estimate, the wine's name and origin for About this wine and for What others say (Anthropic uses it to search reputable wine sites), the CSV headers and sample rows you ask it to map, or the cellar details and your taste summary the sommelier looks up.",
           "The microphone button uses your browser's own speech service (in Chrome, that sends your voice to Google).",
           "Anyone who can use your computer's browser can open Vintry. Remove your key in Settings if you share the computer.",
         ],

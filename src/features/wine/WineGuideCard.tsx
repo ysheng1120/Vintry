@@ -3,16 +3,15 @@ import { Card } from "../../components/ui/Card";
 import type { Wine } from "../../domain/types";
 import ProfileSection from "./ProfileSection";
 import CriticsSection from "./CriticsSection";
-import PriceSection from "./PriceSection";
 
 export interface WineGuideCardProps {
   wine: Wine;
 }
 
 /**
- * "About this wine": one card on the wine page holding the AI profile, what critics say, and
- * shop prices as stacked sections, not tabs (KTD5), so each section keeps its own state and a
- * running request is never cancelled by switching away. The AI status note shows once here.
+ * "About this wine": one card on the wine page holding the AI profile and what others (not
+ * Robert Parker) say, as stacked sections, not tabs (KTD5), so each section keeps its own state
+ * and a running request is never cancelled by switching away. The AI status note shows once here.
  * Render it with `key={wine.id}` so a different wine starts with fresh section state.
  */
 export default function WineGuideCard({ wine }: WineGuideCardProps) {
@@ -24,7 +23,6 @@ export default function WineGuideCard({ wine }: WineGuideCardProps) {
       <div className="mt-4 flex flex-col divide-y divide-border *:py-4 *:first:pt-0 *:last:pb-0">
         <ProfileSection wine={wine} />
         <CriticsSection wine={wine} />
-        <PriceSection wine={wine} />
       </div>
     </Card>
   );

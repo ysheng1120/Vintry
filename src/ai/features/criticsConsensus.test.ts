@@ -249,7 +249,7 @@ describe("scoreAppearsIn", () => {
     ["17.5", "Score: 17.55/20", false],
     ["17.5", "Score: 117.5", false],
     ["17.5", "Score:\n 17.5 /\n20", true],
-    ["95+", "Parker gave it 95+ points", true],
+    ["95+", "Suckling gave it 95+ points", true],
     ["92-94", "Barrel score 92-94", true],
     ["94", "Barrel score 92-94", true],
     ["abc", "abc", false],
@@ -292,6 +292,62 @@ describe("verifyCritics", () => {
         source: { url: JANCIS, title: "Jancis" },
       },
     ]);
+  });
+
+  it("leaves out Robert Parker: his scores, points, and consensus sentences", () => {
+    const result = verifyCritics(
+      summary({
+        consensus: "Critics like it. Robert Parker called it a classic. Decanter agrees.",
+        points: [
+          { text: "Parker praised the length", sourceIds: [2] },
+          { text: "Fresh and savoury", sourceIds: [1] },
+        ],
+        scores: [
+          score({
+            critic: "Robert Parker",
+            publication: "The Wine Advocate",
+            score: "96",
+            scale: "100",
+            sourceId: 2,
+          }),
+          score({
+            critic: "William Kelley",
+            publication: "Robert Parker Wine Advocate",
+            score: "96",
+            scale: "100",
+            sourceId: 2,
+          }),
+          score({}),
+        ],
+      }),
+      SOURCES,
+    );
+    expect(result.consensus).toBe("Critics like it. Decanter agrees.");
+    expect(result.points.map((point) => point.text)).toEqual(["Fresh and savoury"]);
+    expect(result.scores.map((kept) => kept.critic)).toEqual(["Jancis Robinson"]);
+  });
+
+  it("finds nothing when only Robert Parker was found", () => {
+    const result = verifyCritics(
+      summary({
+        points: [{ text: "Parker gave it high marks", sourceIds: [2] }],
+        scores: [
+          score({
+            critic: "Robert Parker",
+            publication: "",
+            score: "96",
+            scale: "100",
+            sourceId: 2,
+          }),
+        ],
+      }),
+      SOURCES,
+    );
+    expect(result.found).toBe(false);
+  });
+
+  it("does not search robertparker.com", () => {
+    expect(CRITIC_SITES).not.toContain("robertparker.com");
   });
 
   it("drops scores that are unknown, from another source, unlisted, or off the scale", () => {
@@ -417,7 +473,7 @@ describe("generateWineCritics", () => {
 
     expect(ai.requests).toHaveLength(3);
     expect(ai.requests[1]?.messages[1]?.role).toBe("assistant");
-    expect(result.summary).toBe("Found what critics say about Ridge Monte Bello 2019");
+    expect(result.summary).toBe("Found what others say about Ridge Monte Bello 2019");
     const saved = (await db.wines.get(wine.id))?.critics;
     expect(saved).toMatchObject({ found: true, consensus: SUMMARY.consensus });
     expect(saved?.scores.map((s) => s.score)).toEqual(["17.5"]);
