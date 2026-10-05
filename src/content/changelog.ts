@@ -15,6 +15,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.2",
+    date: "2026-10-05",
+    headline: "What others say is faster and finds more.",
+    changes: [
+      "What others (excl. Parker) say now searches the whole web and reads a few review pages, like Claude does in chat. It prefers professional critics, then shop tasting notes and wine writers.",
+      "Scores are checked against the full page Claude read, not only a short quote.",
+      "A search now stops after 2 minutes with a clear message, so you never wait longer.",
+    ],
+  },
+  {
     version: "1.5.1",
     date: "2026-10-05",
     headline: "What others say finds reviews again.",

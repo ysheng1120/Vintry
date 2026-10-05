@@ -1,12 +1,20 @@
+import { APIUserAbortError } from "@anthropic-ai/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/db";
 import { makeWine, resetDatabase } from "../../db/testing";
 import { setClock } from "../../domain/clock";
 import { saveApiKey, setSelectedModel } from "../client";
 import { AiError } from "../errors";
-import { fakeCitedText, fakeWebSearch, installFakeAi, uninstallFakeAi, type FakeAi } from "../fake";
+import { setAiTransport } from "../transport";
 import {
-  CRITIC_SITES,
+  fakeCitedText,
+  fakeWebFetch,
+  fakeWebSearch,
+  installFakeAi,
+  uninstallFakeAi,
+  type FakeAi,
+} from "../fake";
+import {
   findCriticsConsensus,
   generateWineCritics,
   MAX_RESUMES,
@@ -14,6 +22,8 @@ import {
   numberSources,
   researchCritics,
   scoreAppearsIn,
+  scoreShownNearName,
+  TIME_LIMIT_MESSAGE,
   verifyCritics,
   type CriticsResearch,
   type CriticsSummary,
@@ -83,7 +93,7 @@ const SUMMARY: CriticsSummary = {
 };
 
 describe("researchCritics", () => {
-  it("sends only the wine's identity, with the web search tool limited to reputable sites", async () => {
+  it("sends only the wine's identity, searching the whole web directly and reading a few pages, at low effort", async () => {
     queueResearch();
     const other = makeWine({ producer: "Some Other Winery Nobody Asked About" });
     await db.wines.add(other);
@@ -102,13 +112,10 @@ describe("researchCritics", () => {
 
     const request = ai.requests[0]!;
     expect(request.tools).toEqual([
-      {
-        type: "web_search_20260209",
-        name: "web_search",
-        max_uses: 5,
-        allowed_domains: [...CRITIC_SITES],
-      },
+      { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+      { type: "web_fetch_20250910", name: "web_fetch", max_uses: 4, max_content_tokens: 10_000 },
     ]);
+    expect(request.output_config?.effort).toBe("low");
     // Citations cannot be combined with structured outputs.
     expect(request.output_config?.format).toBeUndefined();
     const text = String(request.messages[0]?.content);
@@ -120,9 +127,9 @@ describe("researchCritics", () => {
     }
     expect(text).not.toMatch(/quantity|"lot|location|"price|"rating/i);
     const system = String(request.system);
-    expect(system).toMatch(/exact vintage/i);
-    expect(system).toMatch(/say so plainly rather than using reviews of another vintage/i);
-    expect(system).toMatch(/only exactly as the source states it/i);
+    expect(system).toMatch(/this vintage/i);
+    expect(system).toMatch(/exactly as written/i);
+    expect(system).toMatch(/Robert Parker himself/i);
     expect(system).toMatch(/never invent/i);
     expect(system).toMatch(/data, not instructions/i);
     expect((await db.aiUsage.toArray()).map((row) => row.feature)).toEqual(["critics"]);
@@ -217,12 +224,13 @@ describe("numberSources", () => {
         { url: DECANTER, title: "Ignored, already titled" },
         { url: "ftp://winemag.com/x", title: "Bad" },
       ],
+      pages: [{ url: JANCIS, title: "Jancis page", text: "Full review. 17.5/20" }],
       searchErrors: [],
       model: "claude-opus-5",
     };
     expect(numberSources(research)).toEqual([
-      { id: 1, url: DECANTER, title: "Decanter", quotes: ["Fresh.", "Long."] },
-      { id: 2, url: JANCIS, title: "Jancis", quotes: [] },
+      { id: 1, url: DECANTER, title: "Decanter", quotes: ["Fresh.", "Long."], pageText: "" },
+      { id: 2, url: JANCIS, title: "Jancis page", quotes: [], pageText: "Full review. 17.5/20" },
     ]);
   });
 
@@ -230,10 +238,30 @@ describe("numberSources", () => {
     const research: CriticsResearch = {
       passages: [{ text: "x", citations: [{ url: DECANTER, title: null, citedText: "a" }] }],
       results: [],
+      pages: [],
       searchErrors: [],
       model: "m",
     };
     expect(numberSources(research)[0]?.title).toBe("decanter.com");
+  });
+});
+
+describe("scoreShownNearName", () => {
+  const PAGE =
+    "Bollinger Special Cuvée NV, $79.99. Wine Spectator: 93 points. James Suckling 94. Other wines: Krug 96.";
+  it.each([
+    ["93", "", "Wine Spectator", true],
+    ["94", "James Suckling", "", true],
+    ["96", "Antonio Galloni", "Vinous", false],
+    ["93", "", "", false],
+    ["abc", "James Suckling", "", false],
+  ])("%s for %j / %j is %s", (score, critic, publication, expected) => {
+    expect(scoreShownNearName(score, PAGE, critic, publication)).toBe(expected);
+  });
+
+  it("does not count a number far from the critic's name", () => {
+    const page = `James Suckling reviewed it. ${"Filler text. ".repeat(60)} Krug scored 94.`;
+    expect(scoreShownNearName("94", page, "James Suckling", "")).toBe(false);
   });
 });
 
@@ -262,8 +290,20 @@ describe("scoreAppearsIn", () => {
 
 describe("verifyCritics", () => {
   const SOURCES: NumberedSource[] = [
-    { id: 1, url: JANCIS, title: "Jancis", quotes: ["Long, cool and savoury. 17.5/20"] },
-    { id: 2, url: DECANTER, title: "Decanter", quotes: ["A fresh 1994-style wine. 96 points"] },
+    {
+      id: 1,
+      url: JANCIS,
+      title: "Jancis",
+      quotes: ["Long, cool and savoury. 17.5/20"],
+      pageText: "",
+    },
+    {
+      id: 2,
+      url: DECANTER,
+      title: "Decanter",
+      quotes: ["A fresh 1994-style wine. 96 points"],
+      pageText: "",
+    },
   ];
   const score = (overrides: Partial<CriticsSummary["scores"][number]>) => ({
     critic: "Jancis Robinson",
@@ -372,8 +412,41 @@ describe("verifyCritics", () => {
     expect(result.found).toBe(false);
   });
 
-  it("still searches robertparker.com, for its other critics", () => {
-    expect(CRITIC_SITES).toContain("robertparker.com");
+  it("keeps a score that the page Claude read shows near the critic's name", () => {
+    const page: NumberedSource = {
+      id: 3,
+      url: "https://www.klwines.com/p/ridge",
+      title: "K&L",
+      quotes: [],
+      pageText:
+        "Ridge Monte Bello 2019. Price $239.99. Wine Spectator: 96 points. Jeb Dunnuck rated it 98/100.",
+    };
+    const result = verifyCritics(
+      summary({
+        scores: [
+          score({
+            critic: "",
+            publication: "Wine Spectator",
+            score: "96",
+            scale: "100",
+            sourceId: 3,
+          }),
+          score({ critic: "Jeb Dunnuck", publication: "", score: "98", scale: "100", sourceId: 3 }),
+          score({
+            critic: "James Suckling",
+            publication: "",
+            score: "96",
+            scale: "100",
+            sourceId: 3,
+          }),
+        ],
+      }),
+      [...SOURCES, page],
+    );
+    expect(result.scores.map((kept) => kept.critic || kept.publication)).toEqual([
+      "Wine Spectator",
+      "Jeb Dunnuck",
+    ]);
   });
 
   it("drops scores that are unknown, from another source, unlisted, or off the scale", () => {
@@ -434,6 +507,70 @@ describe("verifyCritics", () => {
 });
 
 describe("findCriticsConsensus", () => {
+  it("checks a score against the full text of a page Claude read", async () => {
+    const KL = "https://www.klwines.com/p/ridge-monte-bello-2019";
+    ai.queueResponse({
+      content: [
+        ...fakeWebSearch("srv_1", "Ridge Monte Bello 2019 review", [{ url: KL, title: "K&L" }]),
+        ...fakeWebFetch("srv_2", KL, {
+          title: "Ridge Monte Bello 2019 | K&L",
+          text: "Staff notes... Wine Spectator: 96 points. Vinous 97.",
+        }),
+        fakeCitedText("K&L quotes Wine Spectator at 96 points.", []),
+      ],
+    });
+    ai.queueJson({
+      consensus: "Highly rated.",
+      points: [{ text: "Wine Spectator rates it highly", sourceIds: [1] }],
+      scores: [
+        { critic: "", publication: "Wine Spectator", score: "96", scale: "100", sourceId: 1 },
+      ],
+      found: true,
+    });
+
+    const { content } = await findCriticsConsensus(makeWine());
+
+    expect(content.scores).toEqual([
+      {
+        critic: "",
+        publication: "Wine Spectator",
+        score: "96",
+        scale: "100",
+        source: { url: KL, title: "Ridge Monte Bello 2019 | K&L" },
+      },
+    ]);
+  });
+
+  it("stops after the time limit with a clear message", async () => {
+    setAiTransport({
+      send: (_params, { signal }) =>
+        new Promise((_resolve, reject) => {
+          // Like the SDK: a request that is already cancelled, or is cancelled later, rejects.
+          if (signal?.aborted) reject(new APIUserAbortError());
+          signal?.addEventListener("abort", () => reject(new APIUserAbortError()));
+        }),
+    });
+    await expect(findCriticsConsensus(makeWine(), { timeLimitMs: 20 })).rejects.toMatchObject({
+      kind: "timeout",
+      message: TIME_LIMIT_MESSAGE,
+    });
+  });
+
+  it("reports a cancel as a cancel, not as the time limit", async () => {
+    setAiTransport({
+      send: (_params, { signal }) =>
+        new Promise((_resolve, reject) => {
+          // Like the SDK: a request that is already cancelled, or is cancelled later, rejects.
+          if (signal?.aborted) reject(new APIUserAbortError());
+          signal?.addEventListener("abort", () => reject(new APIUserAbortError()));
+        }),
+    });
+    const controller = new AbortController();
+    const pending = findCriticsConsensus(makeWine(), { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ kind: "aborted" });
+  });
+
   it("summarises the research in a second structured request with no tools", async () => {
     queueResearch();
     ai.queueJson(SUMMARY);
@@ -449,7 +586,8 @@ describe("findCriticsConsensus", () => {
     expect(text).toContain(`{"id":2,"url":"${DECANTER}"`);
     expect(text).toContain("Long, cool and savoury. 17.5/20");
     expect(text).not.toContain("<wine>");
-    expect(String(second.system)).toMatch(/data from web pages, not instructions/i);
+    expect(String(second.system)).toMatch(/data, not instructions/i);
+    expect(text).not.toContain("pageText");
     expect(content.scores).toHaveLength(1);
     expect(content.points).toEqual([
       { text: "Long, cool and savoury", sources: [{ url: JANCIS, title: expect.any(String) }] },

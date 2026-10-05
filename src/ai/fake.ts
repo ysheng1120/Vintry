@@ -115,6 +115,35 @@ export function fakeWebSearch(
   ] as BetaContentBlock[];
 }
 
+/**
+ * A page the server read with web fetch: its `server_tool_use` block and its
+ * `web_fetch_tool_result`, which holds the page text or an error object.
+ */
+export function fakeWebFetch(
+  id: string,
+  url: string,
+  page: { title: string | null; text: string } | { errorCode: string },
+): BetaContentBlock[] {
+  const content =
+    "errorCode" in page
+      ? { type: "web_fetch_tool_result_error", error_code: page.errorCode }
+      : {
+          type: "web_fetch_result",
+          url,
+          retrieved_at: "2026-10-05T12:00:00Z",
+          content: {
+            type: "document",
+            title: page.title,
+            citations: null,
+            source: { type: "text", media_type: "text/plain", data: page.text },
+          },
+        };
+  return [
+    { type: "server_tool_use", id, name: "web_fetch", input: { url } },
+    { type: "web_fetch_tool_result", tool_use_id: id, content },
+  ] as BetaContentBlock[];
+}
+
 /** A text block citing web search results. */
 export function fakeCitedText(
   text: string,

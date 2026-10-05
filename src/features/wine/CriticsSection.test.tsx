@@ -133,7 +133,7 @@ describe("CriticsSection (What others say)", () => {
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute("title", "Needs AI key");
     expect(
-      screen.getByText("Searches reputable wine sites. Uses your AI key (a few web searches)."),
+      screen.getByText(/Searches the web and reads a few review pages\. .*Takes up to 2 minutes\./),
     ).toBeInTheDocument();
   });
 

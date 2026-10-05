@@ -19,9 +19,9 @@ export interface CriticsSectionProps {
 }
 
 /**
- * The "What others (excl. Parker) say" section of the About this wine card: on request, Claude searches
- * reputable wine sites for this wine and the app shows a short, sourced summary. Scores are shown
- * only when the text cited from their source shows them (checked in criticsConsensus.ts).
+ * The "What others (excl. Parker) say" section of the About this wine card: on request, Claude
+ * searches the web and reads a few pages, and the app shows a short, sourced summary. Scores are
+ * shown only when their page shows them (checked in criticsConsensus.ts).
  * Finding, refreshing, and removing it are undoable commands (KTD4); only the wine's identity is
  * sent. The card shows the AI status note once; buttons carry it as a title.
  */
@@ -93,7 +93,7 @@ export default function CriticsSection({ wine }: CriticsSectionProps) {
       {!critics ? (
         <>
           <p className="text-sm text-ink-muted">
-            Searches reputable wine sites. Uses your AI key (a few web searches).
+            Searches the web and reads a few review pages. Uses your AI key. Takes up to 2 minutes.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button

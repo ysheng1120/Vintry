@@ -3,18 +3,26 @@ import type {
   BetaMessageParam,
   BetaToolUnion,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
-import { getSelectedModel, sendMessage } from "../client";
+import { sendMessage, type Effort } from "../client";
 import { AiError } from "../errors";
 
 /**
- * Step 1 of every "research on the web" feature (critics, prices): Claude searches a fixed list
- * of sites with Anthropic's server-side web search tool and answers with cited text. This module
- * runs that turn and hands back what was said and what the tool returned; each feature decides
- * what to ask, which sites to allow, and how to check the answer.
+ * Step 1 of a "research on the web" feature (What others say): Claude searches the web with
+ * Anthropic's server-side web search tool, reads a few pages in full with the web fetch tool,
+ * and answers with cited text. This module runs that turn and hands back what was said, the
+ * search results, and the text of every page read; the feature decides what to ask and how to
+ * check the answer.
+ *
+ * Both tools are the basic versions, called directly. The newer versions filter results with
+ * a code-execution step first, which was slow and could leave no quotes for the score check.
  */
 
 /** Most web searches one research request may run. */
 export const MAX_SEARCHES = 5;
+/** Most pages one research request may read in full. */
+export const MAX_FETCHES = 4;
+/** About how much of each page Claude reads (tokens), so a long page stays cheap and quick. */
+export const PAGE_TOKEN_LIMIT = 10_000;
 /** Most times a paused research turn (`pause_turn`) is resumed. */
 export const MAX_RESUMES = 3;
 
@@ -39,11 +47,20 @@ export interface ResearchPassage {
   citations: ResearchCitation[];
 }
 
+/** A page Claude read in full with the web fetch tool. */
+export interface ResearchPage {
+  url: string;
+  title: string | null;
+  text: string;
+}
+
 export interface WebResearch {
   /** Claude's answer, block by block, with the citations of each block. */
   passages: ResearchPassage[];
   /** Every search result the tool returned. */
   results: { url: string; title: string }[];
+  /** Every page read in full (text pages only; PDFs are skipped). */
+  pages: ResearchPage[];
   /** Error codes of every search that returned an error (for example "max_uses_exceeded"). */
   searchErrors: string[];
   /** Searches that returned a result list (even an empty one), across every resumed turn. */
@@ -57,21 +74,27 @@ export interface WebResearch {
 /** The search tool's error code for a search past `max_uses`: the limit working, not a failure. */
 const MAX_USES_EXCEEDED = "max_uses_exceeded";
 
-/** The web search tool, in the newest version the chosen model supports. */
+/** The basic web search tool, called directly (no filtering code). No domain list means the whole web. */
 export function webSearchTool(
-  modelId: string,
-  allowedDomains: readonly string[],
   maxUses: number = MAX_SEARCHES,
+  allowedDomains?: readonly string[],
 ): BetaToolUnion {
-  const settings = {
-    name: "web_search" as const,
+  return {
+    type: "web_search_20250305",
+    name: "web_search",
     max_uses: maxUses,
-    allowed_domains: [...allowedDomains],
+    ...(allowedDomains ? { allowed_domains: [...allowedDomains] } : {}),
   };
-  // Dynamic filtering (web_search_20260209) needs Opus/Sonnet 4.6 or later.
-  return modelId === "claude-haiku-4-5"
-    ? { type: "web_search_20250305", ...settings }
-    : { type: "web_search_20260209", ...settings };
+}
+
+/** The basic web fetch tool: reads a page from the search results in full. */
+export function webFetchTool(maxUses: number = MAX_FETCHES): BetaToolUnion {
+  return {
+    type: "web_fetch_20250910",
+    name: "web_fetch",
+    max_uses: maxUses,
+    max_content_tokens: PAGE_TOKEN_LIMIT,
+  };
 }
 
 function collect(blocks: BetaContentBlock[], research: WebResearch): void {
@@ -99,6 +122,16 @@ function collect(blocks: BetaContentBlock[], research: WebResearch): void {
         research.searchErrors.push(code);
         if (code !== MAX_USES_EXCEEDED) research.searchesFailed += 1;
       }
+    } else if (block.type === "web_fetch_tool_result") {
+      // A page that could not be read is an error object; Claude carries on without it.
+      const fetched = block.content;
+      if (fetched.type === "web_fetch_result" && fetched.content.source.type === "text") {
+        research.pages.push({
+          url: fetched.url,
+          title: fetched.content.title,
+          text: fetched.content.source.data,
+        });
+      }
     }
   }
 }
@@ -113,10 +146,14 @@ export interface WebResearchRequest {
   system: string;
   /** The first user message. */
   content: string;
-  /** The only sites the search may use; the tool matches subdomains too. */
-  allowedDomains: readonly string[];
+  /** Only these sites; leave it out to search the whole web. */
+  allowedDomains?: readonly string[];
   /** Most searches the turn may run (default MAX_SEARCHES). */
   maxSearches?: number;
+  /** Most pages the turn may read in full (default MAX_FETCHES; 0 turns reading off). */
+  maxFetches?: number;
+  /** How hard Claude thinks; research uses "low" so it answers quickly. */
+  effort?: Effort;
   signal?: AbortSignal;
 }
 
@@ -127,12 +164,14 @@ export interface WebResearchRequest {
  */
 export async function runWebResearch(request: WebResearchRequest): Promise<WebResearch> {
   const { feature, system, content, allowedDomains, maxSearches, signal } = request;
-  const model = await getSelectedModel();
-  const tools = [webSearchTool(model.id, allowedDomains, maxSearches)];
+  const maxFetches = request.maxFetches ?? MAX_FETCHES;
+  const tools = [webSearchTool(maxSearches, allowedDomains)];
+  if (maxFetches > 0) tools.push(webFetchTool(maxFetches));
   const messages: BetaMessageParam[] = [{ role: "user", content }];
   const research: WebResearch = {
     passages: [],
     results: [],
+    pages: [],
     searchErrors: [],
     searchesSucceeded: 0,
     searchesFailed: 0,
@@ -141,7 +180,10 @@ export async function runWebResearch(request: WebResearchRequest): Promise<WebRe
 
   for (let resumes = 0; ; resumes += 1) {
     throwIfAborted(signal);
-    const message = await sendMessage({ feature, system, messages, tools }, { signal });
+    const message = await sendMessage(
+      { feature, system, messages, tools, effort: request.effort },
+      { signal },
+    );
     research.model = message.model;
     if (message.stop_reason === "refusal") throw new AiError("refusal");
     if (message.stop_reason === "max_tokens") throw new AiError("max-tokens");
@@ -153,6 +195,40 @@ export async function runWebResearch(request: WebResearchRequest): Promise<WebRe
   return research;
 }
 
+/** How long a whole research feature (searches, reading, and summary) may take. */
+export const RESEARCH_TIME_LIMIT_MS = 120_000;
+
+/**
+ * Runs `work` with a signal that aborts when `outer` aborts or when `limitMs` has passed. When
+ * the time runs out (and the collector did not cancel), it throws AiError "timeout" with
+ * `message`, so the collector never waits on a stuck search. The timer is always cleared.
+ */
+export async function withTimeLimit<T>(
+  limitMs: number,
+  outer: AbortSignal | undefined,
+  message: string,
+  work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const onOuterAbort = () => controller.abort();
+  if (outer?.aborted) controller.abort();
+  else outer?.addEventListener("abort", onOuterAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, limitMs);
+  try {
+    return await work(controller.signal);
+  } catch (error) {
+    if (timedOut && !outer?.aborted) throw new AiError("timeout", { message, cause: error });
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener("abort", onOuterAbort);
+  }
+}
+
 /** A page the research found, numbered for the summary, with the text cited from it. */
 export interface NumberedSource {
   id: number;
@@ -160,18 +236,23 @@ export interface NumberedSource {
   title: string;
   /** Every `cited_text` Claude quoted from this page. */
   quotes: string[];
+  /** The page's full text when Claude read it with web fetch, else "". */
+  pageText: string;
 }
 
-/** Numbers every http(s) page that appeared in a citation or a search result, once each. */
+/**
+ * Numbers every http(s) page that appeared in a citation, a page read, or a search result,
+ * once each, in that order.
+ */
 export function numberSources(
-  research: Pick<WebResearch, "passages" | "results">,
+  research: Pick<WebResearch, "passages" | "results"> & Partial<Pick<WebResearch, "pages">>,
 ): NumberedSource[] {
   const byUrl = new Map<string, NumberedSource>();
   const add = (url: string, title: string | null) => {
     if (!isHttpUrl(url)) return undefined;
     let source = byUrl.get(url);
     if (!source) {
-      source = { id: byUrl.size + 1, url, title: "", quotes: [] };
+      source = { id: byUrl.size + 1, url, title: "", quotes: [], pageText: "" };
       byUrl.set(url, source);
     }
     if (!source.title && title?.trim()) source.title = title.trim();
@@ -181,6 +262,12 @@ export function numberSources(
     for (const citation of passage.citations) {
       const source = add(citation.url, citation.title);
       if (source && citation.citedText.trim()) source.quotes.push(citation.citedText);
+    }
+  }
+  for (const page of research.pages ?? []) {
+    const source = add(page.url, page.title);
+    if (source && page.text.trim()) {
+      source.pageText = source.pageText ? `${source.pageText}\n${page.text}` : page.text;
     }
   }
   for (const result of research.results) add(result.url, result.title);

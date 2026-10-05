@@ -87,8 +87,8 @@ export type CriticSource = z.infer<typeof CriticSourceSchema>;
 
 /**
  * "What critics say": an AI summary of what published critics say about this wine and vintage,
- * researched on reputable wine sites. Every point and score keeps the page it came from; a
- * score is kept only when the cited text from that page shows it (checked in code).
+ * researched on the web. Every point and score keeps the page it came from; a score is kept
+ * only when that page shows it (checked in code).
  */
 export const WineCriticsSchema = z.object({
   /** 2 to 3 plain sentences, or "" when nothing was found. */

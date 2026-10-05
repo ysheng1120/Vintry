@@ -3,13 +3,23 @@ import { db } from "../../db/db";
 import { resetDatabase } from "../../db/testing";
 import { saveApiKey, setSelectedModel } from "../client";
 import { AiError } from "../errors";
-import { fakeCitedText, fakeWebSearch, installFakeAi, uninstallFakeAi, type FakeAi } from "../fake";
+import {
+  fakeCitedText,
+  fakeWebFetch,
+  fakeWebSearch,
+  installFakeAi,
+  uninstallFakeAi,
+  type FakeAi,
+} from "../fake";
 import {
   isHttpUrl,
+  MAX_FETCHES,
   MAX_RESUMES,
   MAX_SEARCHES,
+  PAGE_TOKEN_LIMIT,
   numberSources,
   runWebResearch,
+  withTimeLimit,
   type WebResearchRequest,
 } from "./webResearch";
 
@@ -79,7 +89,7 @@ describe("runWebResearch", () => {
     expect(research.model).toBe("claude-opus-5");
   });
 
-  it("sends the system prompt, the user content, the feature name, and the allowed sites", async () => {
+  it("sends the system prompt, the user content, the feature name, the allowed sites, and the basic direct tools", async () => {
     queueAnswer();
     await runWebResearch(request({ feature: "prices", content: "Price this." }));
     const sent = ai.requests[0]!;
@@ -87,10 +97,16 @@ describe("runWebResearch", () => {
     expect(sent.messages).toEqual([{ role: "user", content: "Price this." }]);
     expect(sent.tools).toEqual([
       {
-        type: "web_search_20260209",
+        type: "web_search_20250305",
         name: "web_search",
         max_uses: MAX_SEARCHES,
         allowed_domains: [...DOMAINS],
+      },
+      {
+        type: "web_fetch_20250910",
+        name: "web_fetch",
+        max_uses: MAX_FETCHES,
+        max_content_tokens: PAGE_TOKEN_LIMIT,
       },
     ]);
     expect(sent.output_config?.format).toBeUndefined();
@@ -103,16 +119,60 @@ describe("runWebResearch", () => {
     expect(ai.requests[0]?.tools?.[0]).toMatchObject({ max_uses: 2 });
   });
 
-  it("gives Haiku 4.5 web_search_20250305 and other models web_search_20260209", async () => {
-    await setSelectedModel("claude-haiku-4-5");
-    queueAnswer();
-    await runWebResearch(request());
-    expect(ai.requests[0]?.tools?.[0]).toMatchObject({ type: "web_search_20250305" });
+  it("uses the same basic tools on every model, with no filtering code", async () => {
+    for (const model of ["claude-haiku-4-5", "claude-sonnet-5", "claude-opus-5"] as const) {
+      await setSelectedModel(model);
+      queueAnswer();
+      await runWebResearch(request());
+    }
+    for (const sent of ai.requests) {
+      expect(sent.tools?.map((tool) => tool.type)).toEqual([
+        "web_search_20250305",
+        "web_fetch_20250910",
+      ]);
+    }
+  });
 
-    await setSelectedModel("claude-sonnet-5");
+  it("searches the whole web when no sites are given, and can turn page reading off", async () => {
     queueAnswer();
-    await runWebResearch(request());
-    expect(ai.requests[1]?.tools?.[0]).toMatchObject({ type: "web_search_20260209" });
+    await runWebResearch(request({ allowedDomains: undefined, maxFetches: 0 }));
+    expect(ai.requests[0]?.tools).toEqual([
+      { type: "web_search_20250305", name: "web_search", max_uses: MAX_SEARCHES },
+    ]);
+  });
+
+  it("passes the effort through", async () => {
+    queueAnswer();
+    await runWebResearch(request({ effort: "low" }));
+    expect(ai.requests[0]?.output_config?.effort).toBe("low");
+  });
+
+  it("keeps the text of every page read and skips pages that could not be read", async () => {
+    ai.queueResponse({
+      content: [
+        ...fakeWebSearch("srv_1", "ridge", [{ url: SITE_A, title: "Wine-Searcher" }]),
+        ...fakeWebFetch("srv_2", SITE_A, {
+          title: "Ridge | Wine-Searcher",
+          text: "Critics: 97/100",
+        }),
+        ...fakeWebFetch("srv_3", SITE_B, { errorCode: "url_not_accessible" }),
+        fakeCitedText("Done.", []),
+      ],
+    });
+    const research = await runWebResearch(request());
+    expect(research.pages).toEqual([
+      { url: SITE_A, title: "Ridge | Wine-Searcher", text: "Critics: 97/100" },
+    ]);
+    expect(research.searchesFailed).toBe(0);
+    expect(numberSources(research)).toEqual([
+      {
+        id: 1,
+        url: SITE_A,
+        title: "Ridge | Wine-Searcher",
+        quotes: [],
+        pageText: "Critics: 97/100",
+      },
+    ]);
   });
 
   it("resumes a paused turn by sending the assistant content back as it is", async () => {
@@ -228,6 +288,34 @@ describe("runWebResearch", () => {
   });
 });
 
+describe("withTimeLimit", () => {
+  it("returns the result when the work ends in time", async () => {
+    await expect(withTimeLimit(1_000, undefined, "Too slow.", async () => 42)).resolves.toBe(42);
+  });
+
+  it("aborts the work and throws a timeout with the message when time runs out", async () => {
+    const work = (signal: AbortSignal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new AiError("aborted")));
+      });
+    await expect(withTimeLimit(10, undefined, "Too slow.", work)).rejects.toMatchObject({
+      kind: "timeout",
+      message: "Too slow.",
+    });
+  });
+
+  it("passes a cancel through as it is", async () => {
+    const outer = new AbortController();
+    const work = (signal: AbortSignal) =>
+      new Promise<never>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new AiError("aborted")));
+      });
+    const pending = withTimeLimit(10_000, outer.signal, "Too slow.", work);
+    outer.abort();
+    await expect(pending).rejects.toMatchObject({ kind: "aborted" });
+  });
+});
+
 describe("isHttpUrl", () => {
   it("accepts http and https and rejects everything else", () => {
     expect(isHttpUrl("https://www.klwines.com/x")).toBe(true);
@@ -257,8 +345,8 @@ describe("numberSources", () => {
       ],
     });
     expect(sources).toEqual([
-      { id: 1, url: SITE_B, title: "K&L", quotes: ["$239.99", "In stock"] },
-      { id: 2, url: SITE_A, title: "Wine-Searcher", quotes: [] },
+      { id: 1, url: SITE_B, title: "K&L", quotes: ["$239.99", "In stock"], pageText: "" },
+      { id: 2, url: SITE_A, title: "Wine-Searcher", quotes: [], pageText: "" },
     ]);
   });
 });
