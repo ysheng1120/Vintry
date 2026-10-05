@@ -10,6 +10,7 @@ import {
   findCriticsConsensus,
   generateWineCritics,
   MAX_RESUMES,
+  namesParker,
   numberSources,
   researchCritics,
   scoreAppearsIn,
@@ -294,13 +295,15 @@ describe("verifyCritics", () => {
     ]);
   });
 
-  it("leaves out Robert Parker: his scores, points, and consensus sentences", () => {
+  it("leaves out Robert Parker himself but keeps other Wine Advocate critics", () => {
     const result = verifyCritics(
       summary({
-        consensus: "Critics like it. Robert Parker called it a classic. Decanter agrees.",
+        consensus:
+          "Critics like it. Robert Parker called it a classic. Robert Parker Wine Advocate's William Kelley finds it pure. Decanter agrees.",
         points: [
           { text: "Parker praised the length", sourceIds: [2] },
           { text: "Fresh and savoury", sourceIds: [1] },
+          { text: "The Robert Parker Wine Advocate review calls it precise", sourceIds: [2] },
         ],
         scores: [
           score({
@@ -317,14 +320,37 @@ describe("verifyCritics", () => {
             scale: "100",
             sourceId: 2,
           }),
+          score({
+            critic: "RP",
+            publication: "Wine Advocate",
+            score: "96",
+            scale: "100",
+            sourceId: 2,
+          }),
           score({}),
         ],
       }),
       SOURCES,
     );
-    expect(result.consensus).toBe("Critics like it. Decanter agrees.");
-    expect(result.points.map((point) => point.text)).toEqual(["Fresh and savoury"]);
-    expect(result.scores.map((kept) => kept.critic)).toEqual(["Jancis Robinson"]);
+    expect(result.consensus).toBe(
+      "Critics like it. Robert Parker Wine Advocate's William Kelley finds it pure. Decanter agrees.",
+    );
+    expect(result.points.map((point) => point.text)).toEqual([
+      "Fresh and savoury",
+      "The Robert Parker Wine Advocate review calls it precise",
+    ]);
+    expect(result.scores.map((kept) => kept.critic)).toEqual(["William Kelley", "Jancis Robinson"]);
+  });
+
+  it.each([
+    ["Robert Parker", true],
+    ["Parker gave it 96", true],
+    ["Robert Parker's Wine Advocate", false],
+    ["The Robert Parker Wine Advocate", false],
+    ["robertparker.com review by William Kelley", false],
+    ["Robert Parker Wine Advocate and Robert Parker himself", true],
+  ])("namesParker(%j) is %s", (text, expected) => {
+    expect(namesParker(text)).toBe(expected);
   });
 
   it("finds nothing when only Robert Parker was found", () => {
@@ -346,8 +372,8 @@ describe("verifyCritics", () => {
     expect(result.found).toBe(false);
   });
 
-  it("does not search robertparker.com", () => {
-    expect(CRITIC_SITES).not.toContain("robertparker.com");
+  it("still searches robertparker.com, for its other critics", () => {
+    expect(CRITIC_SITES).toContain("robertparker.com");
   });
 
   it("drops scores that are unknown, from another source, unlisted, or off the scale", () => {

@@ -15,6 +15,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.5.1",
+    date: "2026-10-05",
+    headline: "What others say finds reviews again.",
+    changes: [
+      "What others (excl. Parker) say now leaves out only Robert Parker himself. Wine Advocate reviews by its other critics, such as William Kelley, show again.",
+      "If Claude finds only Robert Parker's own reviews, it keeps searching for other critics. Click Refresh on a wine to search again.",
+    ],
+  },
+  {
     version: "1.5.0",
     date: "2026-10-04",
     headline: "A simpler wine page, and critics without Robert Parker.",
